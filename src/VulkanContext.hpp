@@ -59,6 +59,7 @@ struct VulkanContext
         physical device
     */
     VkDevice device = VK_NULL_HANDLE;
+    std::array<std::optional<int>, capability_count()> family_queue_indices;
     
     VulkanContext();
 
@@ -82,7 +83,9 @@ struct VulkanContext
         Creates a "logical" device (VkDevice) through
         the context's physical_device
     */
-    bool VulkanContext::create_device(FamilyQueueRequirements& requirements);
+    bool create_device(FamilyQueueRequirements& requirements);
+
+    //bool create_swapchain();
 
     void shutdown();
 

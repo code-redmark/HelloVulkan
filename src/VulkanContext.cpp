@@ -178,18 +178,16 @@ bool VulkanContext::create_device(FamilyQueueRequirements& requirements)
 
 	std::vector<VkDeviceQueueCreateInfo> qInfos;
 
-	std::array<std::optional<int>, capability_count()> fam_indices;
-
 	for (int i = 0; i < fam_count; i++)
 	{
 		bool used = false;
 		int q_count = -1;
 		if (requirements.requires(FamilyCapability::Graphics))
 		{
-			if (!fam_indices[enum_index(FamilyCapability::Graphics)].has_value() && 
+			if (!this->family_queue_indices[enum_index(FamilyCapability::Graphics)].has_value() && 
 			fams_props[i].queueFlags & VK_QUEUE_GRAPHICS_BIT)
 			{
-				fam_indices[enum_index(FamilyCapability::Graphics)] = i;
+				this->family_queue_indices[enum_index(FamilyCapability::Graphics)] = i;
 
 				used = true;
 				if (int count = requirements.queue_requirement(FamilyCapability::Graphics) > q_count) q_count = count; 
@@ -199,7 +197,7 @@ bool VulkanContext::create_device(FamilyQueueRequirements& requirements)
 		
 		if (requirements.requires(FamilyCapability::Presentation))
 		{
-			if (!fam_indices[enum_index(FamilyCapability::Presentation)].has_value())
+			if (!this->family_queue_indices[enum_index(FamilyCapability::Presentation)].has_value())
 			{
 				
 				VkBool32 supported = VK_FALSE;
@@ -212,7 +210,7 @@ bool VulkanContext::create_device(FamilyQueueRequirements& requirements)
 			
 				if (supported == VK_TRUE && requestResult == VK_SUCCESS)
 				{
-					fam_indices[enum_index(FamilyCapability::Presentation)] = i;
+					this->family_queue_indices[enum_index(FamilyCapability::Presentation)] = i;
 				} else std::cout << "queue family " << i << " can't do presentation\n";
 
 				used = true;
@@ -240,7 +238,7 @@ bool VulkanContext::create_device(FamilyQueueRequirements& requirements)
 	// Check if requirements were satisfied
 	for (int i = 0; i < enum_index(FamilyCapability::Count); i++)
 	{
-		if (requirements.requires(index_enum<FamilyCapability>(i)) && !fam_indices[i].has_value()) 
+		if (requirements.requires(index_enum<FamilyCapability>(i)) && !this->family_queue_indices[i].has_value()) 
 		{
 			std::cout << "Capability " << i << " not satisfied\n";
 
@@ -275,3 +273,9 @@ bool VulkanContext::create_device(FamilyQueueRequirements& requirements)
 	
 	return true;
 }
+
+// bool create_swapchain()
+// {
+// 	VkQueue graphics_queue;
+
+// }
