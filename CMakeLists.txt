@@ -1,0 +1,25 @@
+﻿cmake_minimum_required (VERSION 3.15)
+project ("HelloVulkan")
+
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
+find_package(Vulkan REQUIRED)
+
+ 
+ 
+file (GLOB_RECURSE CXX_SRC "src/*.cpp" "src/*.c")
+
+add_executable(HelloVulkan ${CXX_SRC})
+ 
+set_property(TARGET HelloVulkan PROPERTY CXX_STANDARD 17)
+set_property(TARGET HelloVulkan PROPERTY CXX_STANDARD_REQUIRED ON)
+
+target_compile_options(HelloVulkan PRIVATE /fsanitize=address)
+target_link_options(HelloVulkan PRIVATE /fsanitize=address)
+ 
+target_include_directories (HelloVulkan PRIVATE libs)
+target_include_directories(HelloVulkan PRIVATE src)
+
+target_link_libraries(HelloVulkan PRIVATE
+	Vulkan::Vulkan
+)
