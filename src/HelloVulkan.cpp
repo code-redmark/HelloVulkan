@@ -2,7 +2,7 @@
 #define RGFW_PRINT_ERRORS
 #include <RGFW.h>
 
-#include "VulkanContext.hpp"
+#include "Umbrella.h"
 
 #include <iostream>
 
@@ -24,8 +24,14 @@ int main(void)
 	requirements.set_requirement(FamilyCapability::Graphics, true, 1);
 	requirements.set_requirement(FamilyCapability::Presentation, true, 1);
 
+	int w, h;
+	RGFW_window_getSize(window, &w, &h);
+	std::cout << "size of frame buffer:\n width: " << w << "\nheight: " << h << "\n";
+
 	context.Init(RGFW_window_getHWND(window), requirements);
 	
+
+
 	while (!RGFW_window_shouldClose(window))
 	{
 		RGFW_event event;

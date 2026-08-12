@@ -1,41 +1,14 @@
 ﻿#pragma once
 
-#define VK_USE_PLATFORM_WIN32_KHR
-#include <vulkan/vulkan.h>
+#include "VulkanBackend.h"
 
+#include "VulkanSwapchain.h"
 
 #include <vector>
 #include <array>
 #include <optional>
 #include <utility>
-
-enum class FamilyCapability
-{
-    Graphics = 0,
-    Presentation,
-
-    Count = 2
-};
-
-template <typename E>
-constexpr inline int enum_index(E Enum) { return static_cast<int>(Enum); }
-
-template <typename E>
-constexpr inline E index_enum(int index) { return static_cast<E>(index); }
-
-constexpr inline size_t capability_count() { return static_cast<size_t>(FamilyCapability::Count); }
-
-class FamilyQueueRequirements
-{
-private:
-    // requires, queue requirement
-   std::array<std::pair<bool, int>, capability_count()> requirements;
-
-public:
-    bool requires(FamilyCapability capability) const;
-    int queue_requirement(FamilyCapability capability) const;
-    void set_requirement(FamilyCapability capability, bool value, int queue_requirement);
-};
+#include <memory>
 
 struct VulkanContext
 {
@@ -59,7 +32,9 @@ struct VulkanContext
         physical device
     */
     VkDevice device = VK_NULL_HANDLE;
-    std::array<std::optional<int>, capability_count()> family_queue_indices;
+    std::array<std::optional<int>, capability_count()> queue_families_indices;
+
+    std::unique_ptr<VulkanSwapchain> swapchain = nullptr;
     
     VulkanContext();
 
@@ -85,7 +60,7 @@ struct VulkanContext
     */
     bool create_device(FamilyQueueRequirements& requirements);
 
-    //bool create_swapchain();
+    bool create_swapchain();
 
     void shutdown();
 
