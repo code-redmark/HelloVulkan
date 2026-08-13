@@ -18,19 +18,12 @@ static RGFW_window* RGFWSetup()
 int main(void)
 {  
 	RGFW_window* window = RGFWSetup();
-	VulkanContext context;
-
+	
 	FamilyQueueRequirements requirements;
 	requirements.set_requirement(FamilyCapability::Graphics, true, 1);
 	requirements.set_requirement(FamilyCapability::Presentation, true, 1);
-
-	int w, h;
-	RGFW_window_getSize(window, &w, &h);
-	std::cout << "size of frame buffer:\n width: " << w << "\nheight: " << h << "\n";
-
-	context.Init(RGFW_window_getHWND(window), requirements);
 	
-
+	VulkanContext context(RGFW_window_getHWND(window), requirements);	
 
 	while (!RGFW_window_shouldClose(window))
 	{

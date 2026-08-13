@@ -1,8 +1,4 @@
 
-/*
-	needed to get the VK_KHR_win32_Surface extension, in GSAM we're going to 
-	select the right one based on the user's OS, im on Windows so WIN32
-*/
 
 #include "VulkanContext.h"
 #include <iostream>
@@ -11,7 +7,8 @@
 
 
 
-VulkanContext::VulkanContext()
+VulkanContext::VulkanContext(void* window_handle, FamilyQueueRequirements &requirements)
+	: instance(VK_NULL_HANDLE), physical_device(VK_NULL_HANDLE), surface(VK_NULL_HANDLE), device(VK_NULL_HANDLE), queue_families_indices({std::nullopt}), swapchain(nullptr)
 {
 	const char* extensions[] =
 	{
@@ -41,48 +38,56 @@ VulkanContext::VulkanContext()
 	
 	if (instanceResult != VK_SUCCESS)
 	{
-		throw std::runtime_error("VulkanContext instance creation failed.");
+		throw std::runtime_error("[VulkanContext::VulkanContext] instance creation failed.");
 	}
 	else std::cout << "Created VkInstance!\n";
 
-}
-
-void VulkanContext::Init(void* window_handle, FamilyQueueRequirements &requirements)
-{
+	
 	try  
 	{
 		if (!pick_device())
 		{
-			throw std::runtime_error("[VulkanContext::Init] ERROR: physical device not found.");
+			throw std::runtime_error("[VulkanContext::VulkanContext] ERROR: physical device not found.");
 		}
 		else std::cout << "[VulkanContext::Init] OK: Found device\n";
 
 		if (!create_surface(window_handle))
 		{
-			throw std::runtime_error("[VulkanContext::Init] ERROR: couldn't create surface.");
+			throw std::runtime_error("[VulkanContext::VulkanContext] ERROR: couldn't create surface.");
 		}
-		else std::cout << "[VulkanContext::Init] OK: Created surface\n";
+		else std::cout << "[VulkanContext::VulkanContext] OK: Created surface\n";
 
 		if (!create_device(requirements))
 		{
-			throw std::runtime_error("[VulkanContext::Init] ERROR: couldn't create logical device.");
+			throw std::runtime_error("[VulkanContext::VulkanContext] ERROR: couldn't create logical device.");
 		}
-		else std::cout << "[VulkanContext::Init] OK: Created logical device\n";
+		else std::cout << "[VulkanContext::VulkanContext] OK: Created logical device\n";
 
-		this->swapchain = std::unique_ptr<VulkanSwapchain>(new VulkanSwapchain(this->device, this->physical_device, this->surface, this->queue_families_indices));
-		if (this->swapchain == nullptr)
+		std::cout << "About to create swapchain:\n" << "device = " << this->device << "\nphysical_device = " << this->physical_device << "\nsurface = " << this->surface << "\nqueue_families_indices = {";
+		for (int i = 0; i < this->queue_families_indices.size(); i++)
 		{
-			throw std::runtime_error("[VulkanContext::Init] ERROR: couldn't create swapchain.");
+			if (this->queue_families_indices[i].has_value())
+			{
+				std::cout << this->queue_families_indices[i].value();
+			}
+			else std::cout << "nullopt";
+			if (i < this->queue_families_indices.size() - 1) std::cout << ", ";
 		}
-		else std::cout << "[VulkanContext::Init] OK: Created swapchain\n";
+		this->swapchain = std::make_unique<VulkanSwapchain>(*this);
+		if (!this->swapchain)
+		{
+			throw std::runtime_error("[VulkanContext::VulkanContext] ERROR: couldn't create swapchain.");
+		}
+		else std::cout << "[VulkanContext::VulkanContext] OK: Created swapchain\n";
 
 	}
 	catch (std::runtime_error err)
 	{
-		std::cout << err.what();
+		std::cerr << err.what();
 		exit(-1);
 	}
-	
+
+
 }
 
 void VulkanContext::shutdown()
@@ -106,7 +111,7 @@ bool VulkanContext::pick_device()
 	std::vector<VkPhysicalDevice> pDevices(count);
 	vkEnumeratePhysicalDevices(instance, &count, pDevices.data());
 
-	std::string selected;
+	std::optional<std::string> selected = std::nullopt;
 
 	std::cout << "Found " << count << " devices: \n";
 	for (int i = 0; i < count; i++)
@@ -122,7 +127,9 @@ bool VulkanContext::pick_device()
 		}
 	}
 
-	std::cout << "Selected " << selected << "\n";
+	if (selected.has_value()) {
+		std::cout << "Selected " << selected.value() << "\n";
+	}
 
 	if (this->physical_device == VK_NULL_HANDLE) 
 	{
@@ -263,13 +270,5 @@ bool VulkanContext::create_device(FamilyQueueRequirements& requirements)
 		return false;
 	}
 	
-	return true;
-}
-
-bool VulkanContext::create_swapchain()
-{
-
-	
-
 	return true;
 }

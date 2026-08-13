@@ -1,24 +1,24 @@
-#include "VulkanSwapchain.h"
+#include "VulkanContext.h"
 
 
 
-VulkanSwapchain::VulkanSwapchain(VkDevice &device, VkPhysicalDevice &physical_device, VkSurfaceKHR &surface, std::array<std::optional<int>, capability_count()>& family_indices)
+VulkanSwapchain::VulkanSwapchain(VulkanContext& context)
     : swapchain(VK_NULL_HANDLE)
 {
     VkSurfaceCapabilitiesKHR surface_capabilities;
-    vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physical_device, surface, &surface_capabilities);
+    vkGetPhysicalDeviceSurfaceCapabilitiesKHR(context.physical_device, context.surface, &surface_capabilities);
 
     uint32_t format_count;
-    vkGetPhysicalDeviceSurfaceFormatsKHR(physical_device, surface, &format_count, nullptr);
+    vkGetPhysicalDeviceSurfaceFormatsKHR(context.physical_device, context.surface, &format_count, nullptr);
 
     std::vector<VkSurfaceFormatKHR> formats(format_count);
-    vkGetPhysicalDeviceSurfaceFormatsKHR(physical_device, surface, &format_count, formats.data());
+    vkGetPhysicalDeviceSurfaceFormatsKHR(context.physical_device, context.surface, &format_count, formats.data());
 
     uint32_t present_mode_count;
-    vkGetPhysicalDeviceSurfacePresentModesKHR(physical_device, surface, &present_mode_count, nullptr);
+    vkGetPhysicalDeviceSurfacePresentModesKHR(context.physical_device, context.surface, &present_mode_count, nullptr);
 
     std::vector<VkPresentModeKHR> present_modes(present_mode_count);
-    vkGetPhysicalDeviceSurfacePresentModesKHR(physical_device, surface, &present_mode_count, present_modes.data());
+    vkGetPhysicalDeviceSurfacePresentModesKHR(context.physical_device, context.surface, &present_mode_count, present_modes.data());
 
     VkSwapchainCreateInfoKHR info{};
     info.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
@@ -33,14 +33,14 @@ VulkanSwapchain::VulkanSwapchain(VkDevice &device, VkPhysicalDevice &physical_de
 
     // find the unique indices in the application's queue families
     std::set<int> indices;
-    std::cout << "(size = " << family_indices.size() << ")";
+    std::cout << "(size = " << context.queue_families_indices.size() << ")";
     std::cout << "Family index indices: \n";
-    for (int i = 0; i < family_indices.size(); i++)
+    for (int i = 0; i < context.queue_families_indices.size(); i++)
     {
-        if (family_indices[i].has_value())
+        if (context.queue_families_indices[i].has_value())
         {
-            indices.insert(family_indices[i].value());
-            std::cout << "family_indices[" << i << "] = " << family_indices[i].value() << std::endl;
+            indices.insert(context.queue_families_indices[i].value());
+            std::cout << "queue_families_indices[" << i << "] = " << context.queue_families_indices[i].value() << std::endl;
         }
     }
 
@@ -100,8 +100,8 @@ VulkanSwapchain::VulkanSwapchain(VkDevice &device, VkPhysicalDevice &physical_de
     std::cout << "sharingMode: " << info.imageSharingMode << "\n";
     std::cout << "queueFamilyIndexCount: " << info.queueFamilyIndexCount << "\n";
 
-    vkDeviceWaitIdle(device);
-    VkResult result = vkCreateSwapchainKHR(device, &info, nullptr, &this->swapchain);
+    vkDeviceWaitIdle(context.device);
+    VkResult result = vkCreateSwapchainKHR(context.device, &info, nullptr, &this->swapchain);
     if (result != VK_SUCCESS)
     {
         std::cerr << "[VulkanSwapchain::VulkanSwapchain] ERROR: swapchain creation failed\n";

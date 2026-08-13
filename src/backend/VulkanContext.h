@@ -2,16 +2,19 @@
 
 #include "VulkanBackend.h"
 
-#include "VulkanSwapchain.h"
-
+#include <iostream>
 #include <vector>
 #include <array>
 #include <optional>
 #include <utility>
 #include <memory>
+#include <set>
 
-struct VulkanContext
+class VulkanSwapchain;
+
+class VulkanContext
 {
+private:
     /*
         Represents the vulkan instance
     */
@@ -36,11 +39,6 @@ struct VulkanContext
 
     std::unique_ptr<VulkanSwapchain> swapchain = nullptr;
     
-    VulkanContext();
-
-    void Init(void* window_handle, FamilyQueueRequirements &requirements);
-
-
     /*
         Finds a physical GPU device to run the application,
         returns true if it was found
@@ -59,10 +57,19 @@ struct VulkanContext
         the context's physical_device
     */
     bool create_device(FamilyQueueRequirements& requirements);
-
-    bool create_swapchain();
-
-    void shutdown();
-
     
+    
+public:
+    VulkanContext(void* window_handle, FamilyQueueRequirements &requirements);
+    void shutdown();
+    
+friend class VulkanSwapchain;
 };
+
+
+struct VulkanSwapchain
+{
+VkSwapchainKHR swapchain;
+VulkanSwapchain(VulkanContext& context);
+
+}; 
