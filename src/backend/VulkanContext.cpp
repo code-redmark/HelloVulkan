@@ -63,22 +63,12 @@ VulkanContext::VulkanContext(void* window_handle, FamilyQueueRequirements &requi
 		}
 		else std::cout << "[VulkanContext::VulkanContext] OK: Created logical device\n";
 
-		std::cout << "About to create swapchain:\n" << "device = " << this->device << "\nphysical_device = " << this->physical_device << "\nsurface = " << this->surface << "\nqueue_families_indices = {";
-		for (int i = 0; i < this->queue_families_indices.size(); i++)
-		{
-			if (this->queue_families_indices[i].has_value())
-			{
-				std::cout << this->queue_families_indices[i].value();
-			}
-			else std::cout << "nullopt";
-			if (i < this->queue_families_indices.size() - 1) std::cout << ", ";
-		}
-		this->swapchain = std::make_unique<VulkanSwapchain>(*this);
-		if (!this->swapchain)
-		{
-			throw std::runtime_error("[VulkanContext::VulkanContext] ERROR: couldn't create swapchain.");
-		}
-		else std::cout << "[VulkanContext::VulkanContext] OK: Created swapchain\n";
+		// this->swapchain = std::make_unique<VulkanSwapchain>(*this);
+		// if (!this->swapchain)
+		// {
+		// 	throw std::runtime_error("[VulkanContext::VulkanContext] ERROR: couldn't create swapchain.");
+		// }
+		// else std::cout << "[VulkanContext::VulkanContext] OK: Created swapchain\n";
 
 	}
 	catch (std::runtime_error err)
@@ -161,6 +151,8 @@ bool VulkanContext::create_surface(void* win_handle)
 
 	VkResult creationResult = vkCreateWin32SurfaceKHR(this->instance, &info, nullptr, &this->surface);
 
+
+
 	if (creationResult == VK_SUCCESS) return true;
 
 	return false;
@@ -219,10 +211,11 @@ bool VulkanContext::create_device(FamilyQueueRequirements& requirements)
 			}
 		}
 		
-
+		
+		std::vector<float> priorities;
 		if (used)
 		{
-			std::vector<float> priorities(q_count, 1.f);
+			priorities.resize(q_count, 1.f);
 
 			qInfos.emplace_back();
 			auto& back = qInfos.back();
@@ -262,6 +255,17 @@ bool VulkanContext::create_device(FamilyQueueRequirements& requirements)
 	info.pEnabledFeatures = nullptr;
 	info.flags = 0;
 	info.enabledLayerCount = 0;
+
+	std::cout << "Device queue create infos: " << qInfos.size() << "\n";
+
+	for (size_t i = 0; i < qInfos.size(); i++)
+	{
+		std::cout << "queue create info[" << i << "] family = "
+				<< qInfos[i].queueFamilyIndex
+				<< ", queueCount = "
+				<< qInfos[i].queueCount
+				<< "\n";
+	}
 
 	VkResult deviceResult = vkCreateDevice(this->physical_device, &info, nullptr, &this->device);
 	if (deviceResult != VK_SUCCESS) 

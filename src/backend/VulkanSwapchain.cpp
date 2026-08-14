@@ -27,7 +27,18 @@ VulkanSwapchain::VulkanSwapchain(VulkanContext& context)
     info.imageArrayLayers = 1;
     info.imageColorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
     info.imageExtent = surface_capabilities.currentExtent;
-    info.imageFormat = VK_FORMAT_B8G8R8A8_SRGB;
+    info.surface = context.surface;
+
+
+    VkSurfaceFormatKHR chosenFormat = formats[0];
+    for (const auto& f : formats) {
+        if (f.format == VK_FORMAT_B8G8R8A8_SRGB && 
+            f.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
+            chosenFormat = f;
+            break;
+        }
+    }
+    info.imageFormat = chosenFormat.format;
 
     std::cout << "starting std::set stuff\n";
 
@@ -63,6 +74,7 @@ VulkanSwapchain::VulkanSwapchain(VulkanContext& context)
     {
         std::cout << "Sharing mode is exclusive\n";
         info.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
+        info.pQueueFamilyIndices = nullptr;
     }
 
     
@@ -84,23 +96,23 @@ VulkanSwapchain::VulkanSwapchain(VulkanContext& context)
         backend in GSAM to give the user some of the freedom vulkan is about
     */
     info.presentMode = VK_PRESENT_MODE_FIFO_KHR;
-    
-    std::cout << "VK_FORMAT_B8G8R8A8_SRGB = " << VK_FORMAT_B8G8R8A8_SRGB << std::endl;
-    std::cout << "VK_FORMAT_R8G8B8A8_SRGB = " << VK_FORMAT_R8G8B8A8_SRGB << std::endl;
-    std::cout << "VK_FORMAT_R8G8B8A8_UNORM = " << VK_FORMAT_R8G8B8A8_UNORM << std::endl;
-    std::cout << "VK_PRESENT_MODE_FIFO_KHR = " << VK_PRESENT_MODE_FIFO_KHR << std::endl;
-    std::cout << "VK_PRESENT_MODE_MAILBOX_KHR = " << VK_PRESENT_MODE_MAILBOX_KHR << std::endl;
 
-    std::cout << "format: " << info.imageFormat << "\n";
-    std::cout << "extent: " << info.imageExtent.width << "x" << info.imageExtent.height << "\n";
-    std::cout << "minImageCount: " << info.minImageCount << "\n";
-    std::cout << "presentMode: " << info.presentMode << "\n";
-    std::cout << "compositeAlpha: " << info.compositeAlpha << "\n";
-    std::cout << "preTransform: " << info.preTransform << "\n";
-    std::cout << "sharingMode: " << info.imageSharingMode << "\n";
-    std::cout << "queueFamilyIndexCount: " << info.queueFamilyIndexCount << "\n";
+    VkBool32 supported = VK_FALSE;
+    VkResult testResult = vkGetPhysicalDeviceSurfaceSupportKHR(
+        context.physical_device, 
+        indices_list.empty() ? 0 : indices_list[0], 
+        context.surface, 
+        &supported);
 
-    vkDeviceWaitIdle(context.device);
+    std::cout << "Surface support test result: " << testResult 
+        << " supported: " << supported << "\n";
+
+    std::cout << "sizeof(VkSwapchainCreateInfoKHR) = " << sizeof(VkSwapchainCreateInfoKHR) << "\n";
+    std::cout << "info.sType = " << info.sType 
+            << " (expected " << VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR << ")\n";
+    std::cout << "info.pNext = " << info.pNext << "\n";
+    std::cout << "&info = " << &info << "\n";
+
     VkResult result = vkCreateSwapchainKHR(context.device, &info, nullptr, &this->swapchain);
     if (result != VK_SUCCESS)
     {
