@@ -63,12 +63,12 @@ VulkanContext::VulkanContext(void* window_handle, FamilyQueueRequirements &requi
 		}
 		else std::cout << "[VulkanContext::VulkanContext] OK: Created logical device\n";
 
-		// this->swapchain = std::make_unique<VulkanSwapchain>(*this);
-		// if (!this->swapchain)
-		// {
-		// 	throw std::runtime_error("[VulkanContext::VulkanContext] ERROR: couldn't create swapchain.");
-		// }
-		// else std::cout << "[VulkanContext::VulkanContext] OK: Created swapchain\n";
+		this->swapchain = std::make_unique<VulkanSwapchain>(*this);
+		if (!this->swapchain)
+		{
+			throw std::runtime_error("[VulkanContext::VulkanContext] ERROR: couldn't create swapchain.");
+		}
+		else std::cout << "[VulkanContext::VulkanContext] OK: Created swapchain\n";
 
 	}
 	catch (std::runtime_error err)

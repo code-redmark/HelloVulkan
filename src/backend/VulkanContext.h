@@ -69,7 +69,16 @@ friend class VulkanSwapchain;
 
 struct VulkanSwapchain
 {
+
 VkSwapchainKHR swapchain;
+
+VkSharingMode sharing_mode;
+VkFormat image_format;
+VkColorSpaceKHR image_color_space;
+
+std::vector<VkImage> images;
+std::vector<VkImageView> image_views;
+
 VulkanSwapchain(VulkanContext& context);
 
 }; 

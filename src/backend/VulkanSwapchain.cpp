@@ -40,8 +40,6 @@ VulkanSwapchain::VulkanSwapchain(VulkanContext& context)
     }
     info.imageFormat = chosenFormat.format;
 
-    std::cout << "starting std::set stuff\n";
-
     // find the unique indices in the application's queue families
     std::set<int> indices;
     std::cout << "(size = " << context.queue_families_indices.size() << ")";
@@ -118,5 +116,38 @@ VulkanSwapchain::VulkanSwapchain(VulkanContext& context)
     {
         std::cerr << "[VulkanSwapchain::VulkanSwapchain] ERROR: swapchain creation failed\n";
     }
+
+    uint32_t imgCount;
+    VkResult imgResult = vkGetSwapchainImagesKHR(context.device, this->swapchain, &imgCount, nullptr);
+
+
+    this->images.reserve(imgCount);
+    imgResult = vkGetSwapchainImagesKHR(context.device, this->swapchain, &imgCount, this->images.data());
+
+    VkImageSubresourceRange range;
+    range.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    range.baseArrayLayer = 0;
+    range.baseMipLevel = 0;
+    range.layerCount = 1;
+    range.levelCount = 1;
+    
+    VkImageViewCreateInfo viewInfo{};
+    viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+    viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+    viewInfo.format = this->image_format;
+    viewInfo.subresourceRange = range;
+
+    for (int i = 0; i < this->images.size(); i++)
+    {
+        this->image_views.emplace_back();
+        VkResult imgViewCreationResult = vkCreateImageView(context.device, &viewInfo, nullptr, &this->image_views.back());
+    
+        if (imgViewCreationResult != VK_SUCCESS)
+        {
+            std::cerr << "[VulkanSwapchain::VulkanSwapchain] ERROR: error creating image view " << i << "\n";
+        }
+    }
+
+    std::cout << "[VulkanSwapchain::VulkanSwapchain] OK: created image views\n";
 
 } 
