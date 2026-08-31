@@ -1,6 +1,5 @@
-
-
 #include "VulkanContext.h"
+#include "VulkanBackend.h"
 #include <iostream>
 
 #include <optional>
@@ -10,39 +9,107 @@
 VulkanContext::VulkanContext(void* window_handle, FamilyQueueRequirements &requirements)
 	: instance(VK_NULL_HANDLE), physical_device(VK_NULL_HANDLE), surface(VK_NULL_HANDLE), device(VK_NULL_HANDLE), queue_families_indices({std::nullopt}), swapchain(nullptr)
 {
-	const char* extensions[] =
+
+	std::vector<const char*> extensions =
 	{
 		VK_KHR_SURFACE_EXTENSION_NAME,
-		VK_KHR_WIN32_SURFACE_EXTENSION_NAME
+		VK_EXT_DEBUG_UTILS_EXTENSION_NAME
 	};
 
+	#if defined(_WIN32)
+		extensions.push_back(VK_KHR_WIN32_SURFACE_EXTENSION_NAME);
+
+	#elif defined(__ANDROID__)
+		extensions.push_back(VK_KHR_ANDROID_SURFACE_EXTENSION_NAME);
+
+	#elif defined(__linux__)
+
+		#if defined(VK_USE_PLATFORM_WAYLAND_KHR)
+			extensions.push_back(VK_KHR_WAYLAND_SURFACE_EXTENSION_NAME);
+		#elif defined(VK_USE_PLATFORM_XCB_KHR)
+			extensions.push_back(VK_KHR_XCB_SURFACE_EXTENSION_NAME);
+		#elif defined(VK_USE_PLATFORM_XLIB_KHR)
+			extensions.push_back(VK_KHR_XLIB_SURFACE_EXTENSION_NAME);
+		#endif
+
+	#elif defined(__APPLE__)
+		extensions.push_back(VK_KHR_METAL_SURFACE_EXTENSION_NAME);
+	#endif
+
+
+	std::vector<const char*> layers;
+
 	VkApplicationInfo appInfo{};
-	appInfo.apiVersion = VK_API_VERSION_1_3;
-	appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
-	appInfo.applicationVersion = 0;
-	appInfo.engineVersion = 0;
-	appInfo.pApplicationName = nullptr;
-	appInfo.pEngineName = nullptr;
-	appInfo.pNext = nullptr;
+    appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
+    appInfo.pApplicationName = "67";
+    appInfo.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
+    appInfo.pEngineName = "triangel";
+    appInfo.engineVersion = VK_MAKE_VERSION(1, 0, 0);
+    appInfo.apiVersion = VK_API_VERSION_1_0;
 
-	VkInstanceCreateInfo instanceInfo{};
-	instanceInfo.enabledExtensionCount = 2;
-	instanceInfo.ppEnabledExtensionNames = extensions;
-	instanceInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
-	instanceInfo.pApplicationInfo = &appInfo;
+    VkInstanceCreateInfo createInfo{};
+    createInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
+    createInfo.pApplicationInfo = &appInfo;
 
-	instanceInfo.enabledLayerCount = 0;
-	instanceInfo.ppEnabledLayerNames = nullptr;
+	createInfo.enabledExtensionCount = extensions.size();
+	createInfo.ppEnabledExtensionNames = extensions.data();
 
-	VkResult instanceResult = vkCreateInstance(&instanceInfo, nullptr, &this->instance);
+	#ifndef NDEBUG
+		if (this->check_validation_layers_support()) layers.push_back("VK_LAYER_KHRONOS_validation");
+		std::cout << "[VulkanContext::VulkanContext] INFO: pushed VAL_LAYERS_NAME\n";
+	#endif
+
+
+	VkResult instanceResult = vkCreateInstance(&createInfo, nullptr, &this->instance);
 	
 	if (instanceResult != VK_SUCCESS)
 	{
-		throw std::runtime_error("[VulkanContext::VulkanContext] instance creation failed.");
+		std::cerr << "[VulkanContext::VulkanContext] instance creation failed. Code " << instanceResult << "\n";
+		exit(-1);
 	}
 	else std::cout << "Created VkInstance!\n";
 
-	
+	std::cout << "Creating messenger\n";
+
+	#ifndef NDEBUG
+		VkDebugUtilsMessengerCreateInfoEXT debugCreateInfo{};
+		debugCreateInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
+
+		debugCreateInfo.messageSeverity =
+			VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
+			VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
+
+		debugCreateInfo.messageType =
+			VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
+			VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
+			VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
+
+		debugCreateInfo.pfnUserCallback = vulkanDebugCallback;
+		debugCreateInfo.pUserData = nullptr;
+
+		PFN_vkCreateDebugUtilsMessengerEXT createDebugMessenger =
+			reinterpret_cast<PFN_vkCreateDebugUtilsMessengerEXT>(
+				vkGetInstanceProcAddr(this->instance, "vkCreateDebugUtilsMessengerEXT")
+			);
+
+		if (createDebugMessenger)
+		{
+			VkResult result = createDebugMessenger(
+				instance,
+				&debugCreateInfo,
+				nullptr,
+				&this->debugMessenger
+			);
+
+			if (result != VK_SUCCESS)
+			{
+				std::cerr << "Couldn't create debug messenger\n";
+			} else std::cout << "Created debug messenger\n";
+
+			
+		}
+	#endif
+
 	try  
 	{
 		if (!pick_device())
@@ -63,15 +130,20 @@ VulkanContext::VulkanContext(void* window_handle, FamilyQueueRequirements &requi
 		}
 		else std::cout << "[VulkanContext::VulkanContext] OK: Created logical device\n";
 
-		this->swapchain = std::make_unique<VulkanSwapchain>(*this);
-		if (!this->swapchain)
+		try
 		{
-			throw std::runtime_error("[VulkanContext::VulkanContext] ERROR: couldn't create swapchain.");
+			this->swapchain = std::make_unique<VulkanSwapchain>(*this);
+			std::cout << "[VulkanContext::VulkanContext] OK: Created swapchain\n";
 		}
-		else std::cout << "[VulkanContext::VulkanContext] OK: Created swapchain\n";
+		catch(const std::exception& e)
+		{
+			std::cerr << "[VulkanContext::VulkanContext] ERROR: Couldn't create swapchain:\n";
+			std::cerr << e.what() << '\n';
+		}
+
 
 	}
-	catch (std::runtime_error err)
+	catch (const std::runtime_error& err)
 	{
 		std::cerr << err.what();
 		exit(-1);
@@ -82,17 +154,51 @@ VulkanContext::VulkanContext(void* window_handle, FamilyQueueRequirements &requi
 
 void VulkanContext::shutdown()
 {
+
+	PFN_vkDestroyDebugUtilsMessengerEXT destroyDebugMessenger =
+    reinterpret_cast<PFN_vkDestroyDebugUtilsMessengerEXT>(
+        vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT")
+    );
+
+	if (destroyDebugMessenger)
+	{
+		destroyDebugMessenger(instance, this->debugMessenger, nullptr);
+	}
+
 	if (this->instance != VK_NULL_HANDLE) {
 		vkDestroyInstance(this->instance, nullptr);
 		this->instance = VK_NULL_HANDLE;
 	}
 }
 
-/*
-	Gets all the physical devices vulkan recognized and selects the first
-	discrete GPU found, falls back to the first GPU found if no GPU is found
-	and throws an error if there's no GPU
-*/
+#ifndef NDEBUG
+bool VulkanContext::check_validation_layers_support()
+{
+    uint32_t layerCount = 0;
+    vkEnumerateInstanceLayerProperties(&layerCount, nullptr);
+
+    std::vector<VkLayerProperties> availableLayers(layerCount);
+    vkEnumerateInstanceLayerProperties(
+        &layerCount,
+        availableLayers.data()
+    );
+
+    for (const auto& layer : availableLayers)
+    {
+        if (strcmp(layer.layerName, VAL_LAYERS_NAME) == 0)
+		{
+			std::cout << "[VulkanContext::check_validation_layers_support] INFO: found VK_LAYER_KHRONOS_validation\n";
+            return true;
+		}
+    }
+
+	std::cout << "[VulkanContext::check_validation_layers_support] INFO: couldn't find VK_LAYER_KHRONOS_validation\n";	
+    return false;
+}
+#endif
+
+
+
 bool VulkanContext::pick_device()
 {
 	uint32_t count;
@@ -248,24 +354,12 @@ bool VulkanContext::create_device(FamilyQueueRequirements& requirements)
 	info.pQueueCreateInfos = qInfos.data();
 
 	// swapchain 
-	const char* names[1] = { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
+	const char* names[] = { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
 	info.ppEnabledExtensionNames = names;
-	info.enabledExtensionCount = 1;
+	info.enabledExtensionCount = static_cast<uint32_t>(std::size(names));
 
 	info.pEnabledFeatures = nullptr;
 	info.flags = 0;
-	info.enabledLayerCount = 0;
-
-	std::cout << "Device queue create infos: " << qInfos.size() << "\n";
-
-	for (size_t i = 0; i < qInfos.size(); i++)
-	{
-		std::cout << "queue create info[" << i << "] family = "
-				<< qInfos[i].queueFamilyIndex
-				<< ", queueCount = "
-				<< qInfos[i].queueCount
-				<< "\n";
-	}
 
 	VkResult deviceResult = vkCreateDevice(this->physical_device, &info, nullptr, &this->device);
 	if (deviceResult != VK_SUCCESS) 

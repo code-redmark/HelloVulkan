@@ -15,3 +15,4 @@ int FamilyQueueRequirements::queue_requirement(FamilyCapability capability) cons
 {
 	return requirements[static_cast<int>(capability)].second; 
 }
+

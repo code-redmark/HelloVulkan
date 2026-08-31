@@ -10,11 +10,16 @@
 #include <memory>
 #include <set>
 
+#define VAL_LAYERS_NAME "VK_LAYER_KHRONOS_validation"
+
 class VulkanSwapchain;
 
 class VulkanContext
 {
 private:
+
+    VkDebugUtilsMessengerEXT debugMessenger = VK_NULL_HANDLE;
+
     /*
         Represents the vulkan instance
     */
@@ -39,6 +44,10 @@ private:
 
     std::unique_ptr<VulkanSwapchain> swapchain = nullptr;
     
+    #ifndef NDEBUG
+    bool check_validation_layers_support();
+    #endif
+
     /*
         Finds a physical GPU device to run the application,
         returns true if it was found

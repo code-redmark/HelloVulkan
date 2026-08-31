@@ -42,29 +42,20 @@ VulkanSwapchain::VulkanSwapchain(VulkanContext& context)
 
     // find the unique indices in the application's queue families
     std::set<int> indices;
-    std::cout << "(size = " << context.queue_families_indices.size() << ")";
-    std::cout << "Family index indices: \n";
     for (int i = 0; i < context.queue_families_indices.size(); i++)
     {
         if (context.queue_families_indices[i].has_value())
         {
             indices.insert(context.queue_families_indices[i].value());
-            std::cout << "queue_families_indices[" << i << "] = " << context.queue_families_indices[i].value() << std::endl;
         }
     }
-
-    std::cout << "\nfinished std::set stuff\n";
-
 
     info.queueFamilyIndexCount = indices.size() > 1 ? indices.size() : 0;
     std::vector<uint32_t> indices_list(indices.begin(), indices.end());
 
-    std::cout << "List size: " << indices_list.size() << "\nset size: " <<  indices.size() << "\n";
-
     if (indices.size() > 1)
     {
         std::cout << "[VulkanSwapchain::VulkanSwapchain] INFO: Sharing mode is concurrent\n";
-        
         
         info.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
         info.pQueueFamilyIndices = indices_list.data();
@@ -102,20 +93,13 @@ VulkanSwapchain::VulkanSwapchain(VulkanContext& context)
         context.surface, 
         &supported);
 
-    std::cout << "Surface support test result: " << testResult 
-        << " supported: " << supported << "\n";
-
-    std::cout << "sizeof(VkSwapchainCreateInfoKHR) = " << sizeof(VkSwapchainCreateInfoKHR) << "\n";
-    std::cout << "info.sType = " << info.sType 
-            << " (expected " << VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR << ")\n";
-    std::cout << "info.pNext = " << info.pNext << "\n";
-    std::cout << "&info = " << &info << "\n";
 
     VkResult result = vkCreateSwapchainKHR(context.device, &info, nullptr, &this->swapchain);
     if (result != VK_SUCCESS)
     {
-        std::cerr << "[VulkanSwapchain::VulkanSwapchain] ERROR: swapchain creation failed\n";
-    }
+        throw std::runtime_error("SwapchainKHR creation failed\n");
+        return;
+    } else std::cout << "[VulkanSwapchain::VulkanSwapchain] OK: SwapchainKHR created\n";
 
     uint32_t imgCount;
     VkResult imgResult = vkGetSwapchainImagesKHR(context.device, this->swapchain, &imgCount, nullptr);
