@@ -154,7 +154,6 @@ VulkanContext::VulkanContext(void* window_handle, FamilyQueueRequirements &requi
 
 void VulkanContext::shutdown()
 {
-
 	PFN_vkDestroyDebugUtilsMessengerEXT destroyDebugMessenger =
     reinterpret_cast<PFN_vkDestroyDebugUtilsMessengerEXT>(
         vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT")
@@ -335,7 +334,6 @@ bool VulkanContext::create_device(FamilyQueueRequirements& requirements)
 
 	}
 
-	// Check if requirements were satisfied
 	for (int i = 0; i < enum_index(FamilyCapability::Count); i++)
 	{
 		if (requirements.requires(index_enum<FamilyCapability>(i)) && !this->queue_families_indices[i].has_value()) 

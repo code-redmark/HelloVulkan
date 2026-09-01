@@ -3,7 +3,7 @@
 
 
 VulkanSwapchain::VulkanSwapchain(VulkanContext& context)
-    : swapchain(VK_NULL_HANDLE)
+    : swapchain(VK_NULL_HANDLE), device(context.device)
 {
     VkSurfaceCapabilitiesKHR surface_capabilities;
     vkGetPhysicalDeviceSurfaceCapabilitiesKHR(context.physical_device, context.surface, &surface_capabilities);
@@ -104,8 +104,7 @@ VulkanSwapchain::VulkanSwapchain(VulkanContext& context)
     uint32_t imgCount;
     VkResult imgResult = vkGetSwapchainImagesKHR(context.device, this->swapchain, &imgCount, nullptr);
 
-
-    this->images.reserve(imgCount);
+    this->images.resize(imgCount);
     imgResult = vkGetSwapchainImagesKHR(context.device, this->swapchain, &imgCount, this->images.data());
 
     VkImageSubresourceRange range;
@@ -121,17 +120,29 @@ VulkanSwapchain::VulkanSwapchain(VulkanContext& context)
     viewInfo.format = this->image_format;
     viewInfo.subresourceRange = range;
 
+    
+
     for (int i = 0; i < this->images.size(); i++)
     {
-        this->image_views.emplace_back();
-        VkResult imgViewCreationResult = vkCreateImageView(context.device, &viewInfo, nullptr, &this->image_views.back());
+        viewInfo.image = this->images[i];
+
+        VkImageView view;
+        VkResult imgViewCreationResult = vkCreateImageView(context.device, &viewInfo, nullptr, &view);
     
         if (imgViewCreationResult != VK_SUCCESS)
         {
             std::cerr << "[VulkanSwapchain::VulkanSwapchain] ERROR: error creating image view " << i << "\n";
         }
+
+        this->image_views.push_back(view);
     }
 
-    std::cout << "[VulkanSwapchain::VulkanSwapchain] OK: created image views\n";
+}
 
-} 
+VulkanSwapchain::~VulkanSwapchain()
+{
+    for (VkImageView view : this->image_views)
+    {
+        vkDestroyImageView(this->device, view, nullptr);
+    }
+}

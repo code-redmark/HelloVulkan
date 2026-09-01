@@ -79,6 +79,8 @@ friend class VulkanSwapchain;
 struct VulkanSwapchain
 {
 
+VkDevice device;
+
 VkSwapchainKHR swapchain;
 
 VkSharingMode sharing_mode;
@@ -89,5 +91,6 @@ std::vector<VkImage> images;
 std::vector<VkImageView> image_views;
 
 VulkanSwapchain(VulkanContext& context);
+~VulkanSwapchain();
 
 }; 

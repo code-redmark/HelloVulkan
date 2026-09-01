@@ -24,20 +24,16 @@ int main(void)
 	requirements.set_requirement(FamilyCapability::Presentation, true, 1);
 	
 	VulkanContext context(RGFW_window_getHWND(window), requirements);	
-	std::cout << "Done\n";
 
 	while (!RGFW_window_shouldClose(window))
 	{
 		RGFW_event event;
 		while (RGFW_window_checkEvent(window, &event))
 		{
-		
 		}
 	}
-
-
-
 	RGFW_window_close(window);
+
 	context.shutdown();
 
 	return 0;
