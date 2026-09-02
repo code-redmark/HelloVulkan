@@ -19,7 +19,7 @@ int main(void)
 {  
 	RGFW_window* window = RGFWSetup();
 	
-	FamilyQueueRequirements requirements;
+	ApplicationRequirements requirements;
 	requirements.set_requirement(FamilyCapability::Graphics, true, 1);
 	requirements.set_requirement(FamilyCapability::Presentation, true, 1);
 	
@@ -32,7 +32,7 @@ int main(void)
 		{
 		}
 	}
-	RGFW_window_close(window);
+	RGFW_window_close(window); 
 
 	context.shutdown();
 

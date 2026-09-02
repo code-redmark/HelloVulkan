@@ -12,7 +12,9 @@
 
 #define VAL_LAYERS_NAME "VK_LAYER_KHRONOS_validation"
 
-class VulkanSwapchain;
+class CommandManager;
+struct VulkanSwapchain;
+
 
 class VulkanContext
 {
@@ -65,16 +67,47 @@ private:
         Creates a "logical" device (VkDevice) through
         the context's physical_device
     */
-    bool create_device(FamilyQueueRequirements& requirements);
+    bool create_device(ApplicationRequirements& requirements);
     
     
 public:
-    VulkanContext(void* window_handle, FamilyQueueRequirements &requirements);
+    VulkanContext(void* window_handle, ApplicationRequirements &requirements);
     void shutdown();
     
 friend class VulkanSwapchain;
 };
 
+
+/*
+    Contains all the commands in their command buffers in the
+    respective command pools for the given context
+*/
+class CommandManager
+{
+
+friend class VulkanContext;
+    
+private:
+
+    /*
+        A command pool is created for every queue family our 
+        context picked up
+    */
+    std::array<std::optional<VkCommandPool>, capability_count()> pools;
+    
+    std::vector<VkCommandBuffer> commandBuffers;
+
+    /*
+        Creates a command pool for each of the context's queue
+        families
+    */
+    void create_command_pools(std::array<std::optional<int>, capability_count()> queue_families_indices, const VkDevice& device);
+
+
+    CommandManager(std::array<std::optional<int>, capability_count()> queue_families_indices, const VkDevice& device);
+
+
+};
 
 struct VulkanSwapchain
 {

@@ -21,10 +21,10 @@ enum class FamilyCapability
 
 constexpr inline size_t capability_count() { return static_cast<size_t>(FamilyCapability::Count); }
 
-class FamilyQueueRequirements
+class ApplicationRequirements
 {
 private:
-    // requires, queue requirement
+    // requires, amount of queues required
    std::array<std::pair<bool, int>, capability_count()> requirements;
 
 public:

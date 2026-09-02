@@ -6,7 +6,7 @@
 
 
 
-VulkanContext::VulkanContext(void* window_handle, FamilyQueueRequirements &requirements)
+VulkanContext::VulkanContext(void* window_handle, ApplicationRequirements &requirements)
 	: instance(VK_NULL_HANDLE), physical_device(VK_NULL_HANDLE), surface(VK_NULL_HANDLE), device(VK_NULL_HANDLE), queue_families_indices({std::nullopt}), swapchain(nullptr)
 {
 
@@ -263,7 +263,7 @@ bool VulkanContext::create_surface(void* win_handle)
 	return false;
 }
 
-bool VulkanContext::create_device(FamilyQueueRequirements& requirements)
+bool VulkanContext::create_device(ApplicationRequirements& requirements)
 {
 	uint32_t fam_count;
 	vkGetPhysicalDeviceQueueFamilyProperties(this->physical_device, &fam_count, nullptr);
