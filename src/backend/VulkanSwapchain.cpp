@@ -26,7 +26,17 @@ VulkanSwapchain::VulkanSwapchain(VulkanContext& context)
     info.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
     info.imageArrayLayers = 1;
     info.imageColorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
+
     info.imageExtent = surface_capabilities.currentExtent;
+
+    // TODO: implement get window size
+    // if (surface_capabilities.currentExtent.width == 0xFFFFFFFF) {
+    //     auto winSize = context.getWindowSize();
+
+    //     info.imageExtent.width = static_cast<uint32_t>(winSize.x), 
+    //     info.imageExtent.height = static_cast<uint32_t>(winSize.y); 
+    // }
+    
     info.surface = context.surface;
 
 

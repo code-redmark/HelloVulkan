@@ -12,7 +12,7 @@
 
 #define VAL_LAYERS_NAME "VK_LAYER_KHRONOS_validation"
 
-class CommandManager;
+class VulkanCommandManager;
 struct VulkanSwapchain;
 
 
@@ -42,8 +42,10 @@ private:
         physical device
     */
     VkDevice device = VK_NULL_HANDLE;
-    std::array<std::optional<int>, capability_count()> queue_families_indices;
 
+    VmaAllocator vma;
+
+    std::array<std::optional<int>, capability_count()> queue_families_indices;
     std::unique_ptr<VulkanSwapchain> swapchain = nullptr;
     
     #ifndef NDEBUG
@@ -69,6 +71,7 @@ private:
     */
     bool create_device(ApplicationRequirements& requirements);
     
+    bool setup_vma();
     
 public:
     VulkanContext(void* window_handle, ApplicationRequirements &requirements);
@@ -82,7 +85,7 @@ friend class VulkanSwapchain;
     Contains all the commands in their command buffers in the
     respective command pools for the given context
 */
-class CommandManager
+class VulkanCommandManager
 {
 
 friend class VulkanContext;
@@ -104,7 +107,7 @@ private:
     void create_command_pools(std::array<std::optional<int>, capability_count()> queue_families_indices, const VkDevice& device);
 
 
-    CommandManager(std::array<std::optional<int>, capability_count()> queue_families_indices, const VkDevice& device);
+    VulkanCommandManager(std::array<std::optional<int>, capability_count()> queue_families_indices, const VkDevice& device);
 
 
 };

@@ -114,21 +114,26 @@ VulkanContext::VulkanContext(void* window_handle, ApplicationRequirements &requi
 	{
 		if (!pick_device())
 		{
-			throw std::runtime_error("[VulkanContext::VulkanContext] ERROR: physical device not found.");
+			throw std::runtime_error("[VulkanContext::VulkanContext] ERROR: Physical device not found.");
 		}
-		else std::cout << "[VulkanContext::Init] OK: Found device\n";
+		else std::cout << "[VulkanContext::VulkanContext] OK: Picked physical device\n";
 
 		if (!create_surface(window_handle))
 		{
-			throw std::runtime_error("[VulkanContext::VulkanContext] ERROR: couldn't create surface.");
+			throw std::runtime_error("[VulkanContext::VulkanContext] ERROR: Couldn't create surface.");
 		}
 		else std::cout << "[VulkanContext::VulkanContext] OK: Created surface\n";
 
 		if (!create_device(requirements))
 		{
-			throw std::runtime_error("[VulkanContext::VulkanContext] ERROR: couldn't create logical device.");
+			throw std::runtime_error("[VulkanContext::VulkanContext] ERROR: Couldn't create logical device.");
 		}
 		else std::cout << "[VulkanContext::VulkanContext] OK: Created logical device\n";
+
+		if (!setup_vma())
+		{
+			throw std::runtime_error("[VulkanContext::VulkanContext] ERROR: Couldn't setup VMA");
+		} else std::cout << "[VulkanContext::VulkanContext] OK: Setup VMA\n";
 
 		try
 		{
@@ -343,21 +348,40 @@ bool VulkanContext::create_device(ApplicationRequirements& requirements)
 		}
 	}
 
+	VkPhysicalDeviceVulkan12Features Vk12Features{};
+	Vk12Features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
+	Vk12Features.descriptorIndexing = true;
+	Vk12Features.shaderSampledImageArrayNonUniformIndexing = true;
+	Vk12Features.descriptorBindingVariableDescriptorCount = true;
+	Vk12Features.runtimeDescriptorArray = true;
+	Vk12Features.bufferDeviceAddress = true;
+
+	VkPhysicalDeviceVulkan13Features Vk13Features{};
+	Vk13Features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
+	Vk13Features.pNext = &Vk12Features;
+	Vk13Features.synchronization2 = true;
+	Vk13Features.dynamicRendering = true;
+
+	VkPhysicalDeviceFeatures Vk10Features{};
+	Vk10Features.samplerAnisotropy = VK_TRUE;
 
 	VkDeviceCreateInfo info{};
 	info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
 
-	// Queue info
+	info.pEnabledFeatures = &Vk10Features;
+	info.pNext = &Vk13Features;
+
 	info.queueCreateInfoCount = qInfos.size();
 	info.pQueueCreateInfos = qInfos.data();
 
-	// swapchain 
 	const char* names[] = { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
 	info.ppEnabledExtensionNames = names;
 	info.enabledExtensionCount = static_cast<uint32_t>(std::size(names));
 
 	info.pEnabledFeatures = nullptr;
 	info.flags = 0;
+
+	std::cout << "Creating device...\n";
 
 	VkResult deviceResult = vkCreateDevice(this->physical_device, &info, nullptr, &this->device);
 	if (deviceResult != VK_SUCCESS) 
@@ -368,3 +392,24 @@ bool VulkanContext::create_device(ApplicationRequirements& requirements)
 	
 	return true;
 }
+
+bool VulkanContext::setup_vma()
+{
+	VmaVulkanFunctions vkFunctions{};
+	vkFunctions.vkGetInstanceProcAddr = vkGetInstanceProcAddr;;
+	vkFunctions.vkGetDeviceProcAddr = vkGetDeviceProcAddr;
+	vkFunctions.vkCreateImage = vkCreateImage;
+	
+	VmaAllocatorCreateInfo info{};
+	info.flags = VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT;
+	info.physicalDevice = this->physical_device;
+	info.device = this->device;
+	info.pVulkanFunctions = &vkFunctions;
+	info.instance = instance;
+
+	VkResult res = vmaCreateAllocator(&info, &this->vma);
+	if (res != VK_SUCCESS) return false;
+		else return true;
+}
+
+
