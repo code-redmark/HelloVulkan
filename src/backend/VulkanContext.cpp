@@ -9,7 +9,78 @@
 VulkanContext::VulkanContext(void* window_handle, ApplicationRequirements &requirements)
 	: instance(VK_NULL_HANDLE), physical_device(VK_NULL_HANDLE), surface(VK_NULL_HANDLE), device(VK_NULL_HANDLE), queue_families_indices({std::nullopt}), swapchain(nullptr)
 {
+	try  
+	{
+		if (!create_instance())
+		{
+			throw std::runtime_error("[VulkanContext::VulkanContext] ERROR: Couldn't create VkInstance");
+		} else std::cout << "[VulkanContext::VulkanContext] OK: Created VkInstance\n";
 
+		if (!pick_device())
+		{
+			throw std::runtime_error("[VulkanContext::VulkanContext] ERROR: Physical device not found.");
+		}
+		else std::cout << "[VulkanContext::VulkanContext] OK: Picked physical device\n";
+
+		if (!create_surface(window_handle))
+		{
+			throw std::runtime_error("[VulkanContext::VulkanContext] ERROR: Couldn't create surface.");
+		}
+		else std::cout << "[VulkanContext::VulkanContext] OK: Created surface\n";
+
+		if (!create_device(requirements))
+		{
+			throw std::runtime_error("[VulkanContext::VulkanContext] ERROR: Couldn't create logical device.");
+		}
+		else std::cout << "[VulkanContext::VulkanContext] OK: Created logical device\n";
+
+		if (!setup_vma())
+		{
+			throw std::runtime_error("[VulkanContext::VulkanContext] ERROR: Couldn't setup VMA");
+		} else std::cout << "[VulkanContext::VulkanContext] OK: Setup VMA\n";
+
+		try
+		{
+			this->swapchain = std::make_unique<VulkanSwapchain>(*this);
+			std::cout << "[VulkanContext::VulkanContext] OK: Created swapchain\n";
+		}
+		catch(const std::runtime_error& e)
+		{
+			std::cerr << "[VulkanContext::VulkanContext] ERROR: Couldn't create swapchain:\n";
+			std::cerr << e.what() << '\n';
+		}
+
+
+	}
+	catch (const std::runtime_error& err)
+	{
+		std::cerr << err.what();
+		exit(-1);
+	}
+
+
+}
+
+void VulkanContext::shutdown()
+{
+	PFN_vkDestroyDebugUtilsMessengerEXT destroyDebugMessenger =
+    reinterpret_cast<PFN_vkDestroyDebugUtilsMessengerEXT>(
+        vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT")
+    );
+
+	if (destroyDebugMessenger)
+	{
+		destroyDebugMessenger(instance, this->debugMessenger, nullptr);
+	}
+
+	if (this->instance != VK_NULL_HANDLE) {
+		vkDestroyInstance(this->instance, nullptr);
+		this->instance = VK_NULL_HANDLE;
+	}
+}
+
+bool VulkanContext::create_instance()
+{
 	std::vector<const char*> extensions =
 	{
 		VK_KHR_SURFACE_EXTENSION_NAME,
@@ -56,152 +127,14 @@ VulkanContext::VulkanContext(void* window_handle, ApplicationRequirements &requi
 
 	#ifndef NDEBUG
 		if (this->check_validation_layers_support()) layers.push_back("VK_LAYER_KHRONOS_validation");
-		std::cout << "[VulkanContext::VulkanContext] INFO: pushed VAL_LAYERS_NAME\n";
+			else std::cout << "[VulkanContext::VulkanContext] INFO: Validation layers not supported\n";
+		std::cout << "[VulkanContext::VulkanContext] INFO: pushed VK_LAYER_KHRONOS_validation\n";
 	#endif
-
 
 	VkResult instanceResult = vkCreateInstance(&createInfo, nullptr, &this->instance);
-	
-	if (instanceResult != VK_SUCCESS)
-	{
-		std::cerr << "[VulkanContext::VulkanContext] instance creation failed. Code " << instanceResult << "\n";
-		exit(-1);
-	}
-	else std::cout << "Created VkInstance!\n";
-
-	std::cout << "Creating messenger\n";
-
-	#ifndef NDEBUG
-		VkDebugUtilsMessengerCreateInfoEXT debugCreateInfo{};
-		debugCreateInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
-
-		debugCreateInfo.messageSeverity =
-			VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
-			VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
-
-		debugCreateInfo.messageType =
-			VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
-			VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
-			VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
-
-		debugCreateInfo.pfnUserCallback = vulkanDebugCallback;
-		debugCreateInfo.pUserData = nullptr;
-
-		PFN_vkCreateDebugUtilsMessengerEXT createDebugMessenger =
-			reinterpret_cast<PFN_vkCreateDebugUtilsMessengerEXT>(
-				vkGetInstanceProcAddr(this->instance, "vkCreateDebugUtilsMessengerEXT")
-			);
-
-		if (createDebugMessenger)
-		{
-			VkResult result = createDebugMessenger(
-				instance,
-				&debugCreateInfo,
-				nullptr,
-				&this->debugMessenger
-			);
-
-			if (result != VK_SUCCESS)
-			{
-				std::cerr << "Couldn't create debug messenger\n";
-			} else std::cout << "Created debug messenger\n";
-
-			
-		}
-	#endif
-
-	try  
-	{
-		if (!pick_device())
-		{
-			throw std::runtime_error("[VulkanContext::VulkanContext] ERROR: Physical device not found.");
-		}
-		else std::cout << "[VulkanContext::VulkanContext] OK: Picked physical device\n";
-
-		if (!create_surface(window_handle))
-		{
-			throw std::runtime_error("[VulkanContext::VulkanContext] ERROR: Couldn't create surface.");
-		}
-		else std::cout << "[VulkanContext::VulkanContext] OK: Created surface\n";
-
-		if (!create_device(requirements))
-		{
-			throw std::runtime_error("[VulkanContext::VulkanContext] ERROR: Couldn't create logical device.");
-		}
-		else std::cout << "[VulkanContext::VulkanContext] OK: Created logical device\n";
-
-		if (!setup_vma())
-		{
-			throw std::runtime_error("[VulkanContext::VulkanContext] ERROR: Couldn't setup VMA");
-		} else std::cout << "[VulkanContext::VulkanContext] OK: Setup VMA\n";
-
-		try
-		{
-			this->swapchain = std::make_unique<VulkanSwapchain>(*this);
-			std::cout << "[VulkanContext::VulkanContext] OK: Created swapchain\n";
-		}
-		catch(const std::exception& e)
-		{
-			std::cerr << "[VulkanContext::VulkanContext] ERROR: Couldn't create swapchain:\n";
-			std::cerr << e.what() << '\n';
-		}
-
-
-	}
-	catch (const std::runtime_error& err)
-	{
-		std::cerr << err.what();
-		exit(-1);
-	}
-
-
+	if (instanceResult != VK_SUCCESS) return false;
+		else return true;
 }
-
-void VulkanContext::shutdown()
-{
-	PFN_vkDestroyDebugUtilsMessengerEXT destroyDebugMessenger =
-    reinterpret_cast<PFN_vkDestroyDebugUtilsMessengerEXT>(
-        vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT")
-    );
-
-	if (destroyDebugMessenger)
-	{
-		destroyDebugMessenger(instance, this->debugMessenger, nullptr);
-	}
-
-	if (this->instance != VK_NULL_HANDLE) {
-		vkDestroyInstance(this->instance, nullptr);
-		this->instance = VK_NULL_HANDLE;
-	}
-}
-
-#ifndef NDEBUG
-bool VulkanContext::check_validation_layers_support()
-{
-    uint32_t layerCount = 0;
-    vkEnumerateInstanceLayerProperties(&layerCount, nullptr);
-
-    std::vector<VkLayerProperties> availableLayers(layerCount);
-    vkEnumerateInstanceLayerProperties(
-        &layerCount,
-        availableLayers.data()
-    );
-
-    for (const auto& layer : availableLayers)
-    {
-        if (strcmp(layer.layerName, VAL_LAYERS_NAME) == 0)
-		{
-			std::cout << "[VulkanContext::check_validation_layers_support] INFO: found VK_LAYER_KHRONOS_validation\n";
-            return true;
-		}
-    }
-
-	std::cout << "[VulkanContext::check_validation_layers_support] INFO: couldn't find VK_LAYER_KHRONOS_validation\n";	
-    return false;
-}
-#endif
-
-
 
 bool VulkanContext::pick_device()
 {

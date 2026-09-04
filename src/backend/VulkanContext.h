@@ -10,8 +10,6 @@
 #include <memory>
 #include <set>
 
-#define VAL_LAYERS_NAME "VK_LAYER_KHRONOS_validation"
-
 class VulkanCommandManager;
 struct VulkanSwapchain;
 
@@ -50,7 +48,14 @@ private:
     
     #ifndef NDEBUG
     bool check_validation_layers_support();
+    bool create_debug_messenger();
     #endif
+
+    /*
+        Creates a VkInstance for the user's platform and
+        its specific extensions
+    */
+    bool create_instance();
 
     /*
         Finds a physical GPU device to run the application,
