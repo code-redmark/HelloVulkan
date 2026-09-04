@@ -16,6 +16,13 @@ VulkanContext::VulkanContext(void* window_handle, ApplicationRequirements &requi
 			throw std::runtime_error("[VulkanContext::VulkanContext] ERROR: Couldn't create VkInstance");
 		} else std::cout << "[VulkanContext::VulkanContext] OK: Created VkInstance\n";
 
+		#ifndef NDEBUG
+			if (!create_debug_messenger())
+			{
+				throw std::runtime_error("[VulkanContext::VulkanContext] ERROR: Couldn't create debug messenger");
+			} else std::cout << "[VulkanContext::VulkanContext] OK: Created debug messenger\n";
+		#endif
+
 		if (!pick_device())
 		{
 			throw std::runtime_error("[VulkanContext::VulkanContext] ERROR: Physical device not found.");
@@ -63,6 +70,18 @@ VulkanContext::VulkanContext(void* window_handle, ApplicationRequirements &requi
 
 void VulkanContext::shutdown()
 {
+
+	this->swapchain->~VulkanSwapchain();
+
+	if (this->device != VK_NULL_HANDLE)
+	{
+		vkDestroyDevice(this->device, nullptr);
+	}
+	if (this->surface != VK_NULL_HANDLE)
+	{
+		vkDestroySurfaceKHR(this->instance, this->surface, nullptr);
+	}
+
 	PFN_vkDestroyDebugUtilsMessengerEXT destroyDebugMessenger =
     reinterpret_cast<PFN_vkDestroyDebugUtilsMessengerEXT>(
         vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT")
@@ -109,6 +128,11 @@ bool VulkanContext::create_instance()
 
 
 	std::vector<const char*> layers;
+	#ifndef NDEBUG
+		if (this->check_validation_layers_support()) layers.push_back("VK_LAYER_KHRONOS_validation");
+			else std::cout << "[VulkanContext::VulkanContext] INFO: Validation layers not supported\n";
+		std::cout << "[VulkanContext::VulkanContext] INFO: pushed VK_LAYER_KHRONOS_validation\n";
+	#endif
 
 	VkApplicationInfo appInfo{};
     appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
@@ -116,7 +140,7 @@ bool VulkanContext::create_instance()
     appInfo.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
     appInfo.pEngineName = "triangel";
     appInfo.engineVersion = VK_MAKE_VERSION(1, 0, 0);
-    appInfo.apiVersion = VK_API_VERSION_1_0;
+    appInfo.apiVersion = VK_API_VERSION_1_3;
 
     VkInstanceCreateInfo createInfo{};
     createInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
@@ -125,11 +149,9 @@ bool VulkanContext::create_instance()
 	createInfo.enabledExtensionCount = extensions.size();
 	createInfo.ppEnabledExtensionNames = extensions.data();
 
-	#ifndef NDEBUG
-		if (this->check_validation_layers_support()) layers.push_back("VK_LAYER_KHRONOS_validation");
-			else std::cout << "[VulkanContext::VulkanContext] INFO: Validation layers not supported\n";
-		std::cout << "[VulkanContext::VulkanContext] INFO: pushed VK_LAYER_KHRONOS_validation\n";
-	#endif
+	createInfo.enabledLayerCount = layers.size();
+	createInfo.ppEnabledLayerNames = layers.data();
+
 
 	VkResult instanceResult = vkCreateInstance(&createInfo, nullptr, &this->instance);
 	if (instanceResult != VK_SUCCESS) return false;
@@ -146,7 +168,6 @@ bool VulkanContext::pick_device()
 
 	std::optional<std::string> selected = std::nullopt;
 
-	std::cout << "Found " << count << " devices: \n";
 	for (int i = 0; i < count; i++)
 	{
 		VkPhysicalDeviceProperties prop;
@@ -161,7 +182,7 @@ bool VulkanContext::pick_device()
 	}
 
 	if (selected.has_value()) {
-		std::cout << "Selected " << selected.value() << "\n";
+		std::cout << "[VulkanContext::pick_device] INFO: Selected " << selected.value() << "\n";
 	}
 
 	if (this->physical_device == VK_NULL_HANDLE) 
@@ -212,6 +233,7 @@ bool VulkanContext::create_device(ApplicationRequirements& requirements)
 
 	std::vector<VkDeviceQueueCreateInfo> qInfos;
 
+	std::vector<std::vector<float>> priorities;
 	for (int i = 0; i < fam_count; i++)
 	{
 		bool used = false;
@@ -254,20 +276,16 @@ bool VulkanContext::create_device(ApplicationRequirements& requirements)
 			}
 		}
 		
-		
-		std::vector<float> priorities;
 		if (used)
 		{
-			priorities.resize(q_count, 1.f);
+			priorities.push_back(std::vector<float>(q_count, 1.f));
 
 			qInfos.emplace_back();
 			auto& back = qInfos.back();
 			back.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
 			back.queueCount = q_count;
 			back.queueFamilyIndex = i;
-			back.pQueuePriorities = priorities.data();
-
-			
+			back.pQueuePriorities = priorities.back().data();
 		}
 
 	}
@@ -313,8 +331,6 @@ bool VulkanContext::create_device(ApplicationRequirements& requirements)
 
 	info.pEnabledFeatures = nullptr;
 	info.flags = 0;
-
-	std::cout << "Creating device...\n";
 
 	VkResult deviceResult = vkCreateDevice(this->physical_device, &info, nullptr, &this->device);
 	if (deviceResult != VK_SUCCESS) 

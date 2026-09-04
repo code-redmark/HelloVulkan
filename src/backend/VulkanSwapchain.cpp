@@ -40,15 +40,15 @@ VulkanSwapchain::VulkanSwapchain(VulkanContext& context)
     info.surface = context.surface;
 
 
-    VkSurfaceFormatKHR chosenFormat = formats[0];
+    this->image_format = formats[0];
     for (const auto& f : formats) {
         if (f.format == VK_FORMAT_B8G8R8A8_SRGB && 
             f.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
-            chosenFormat = f;
+            this->image_format = f;
             break;
         }
     }
-    info.imageFormat = chosenFormat.format;
+    info.imageFormat = this->image_format.format;
 
     // find the unique indices in the application's queue families
     std::set<int> indices;
@@ -127,7 +127,7 @@ VulkanSwapchain::VulkanSwapchain(VulkanContext& context)
     VkImageViewCreateInfo viewInfo{};
     viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
     viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-    viewInfo.format = this->image_format;
+    viewInfo.format = this->image_format.format;
     viewInfo.subresourceRange = range;
 
     
@@ -155,4 +155,6 @@ VulkanSwapchain::~VulkanSwapchain()
     {
         vkDestroyImageView(this->device, view, nullptr);
     }
+
+    vkDestroySwapchainKHR(this->device, this->swapchain, nullptr);
 }

@@ -21,8 +21,10 @@ static VKAPI_ATTR VkBool32 VKAPI_CALL vulkanDebugCallback(
     const char* typeStr = (messageType & VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT) ? "Validation" :
                           (messageType & VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT) ? "Performance" : "General";
 
+    const char* id_name = pCallbackData->pMessageIdName ? pCallbackData->pMessageIdName : "";
+
     std::cerr << "[Vulkan " << severityStr << " | " << typeStr << "] " 
-              << pCallbackData->pMessageIdName << "\n"
+              << id_name << "\n"
               << "  -> " << pCallbackData->pMessage << "\n\n";
 
     
