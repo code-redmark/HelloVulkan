@@ -7,7 +7,7 @@
 #define VK_USE_PLATFORM_WIN32_KHR
 
 #include <vulkan/vulkan.h>
-#include "deps/vk_mem_alloc.h"
+#include "deps/vma.h"
 
 #include <array>
 #include <utility>

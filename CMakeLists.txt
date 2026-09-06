@@ -9,6 +9,12 @@ find_package(Vulkan REQUIRED)
   
 file (GLOB_RECURSE CXX_SRC "src/*.cpp" "src/*.c")
 
+set_source_files_properties(
+    src/backend/deps/srcs/vma/vma_impl.cpp
+    PROPERTIES
+    COMPILE_OPTIONS "-Wno-nullability-completeness"
+)
+
 add_executable(HelloVulkan ${CXX_SRC})
 
 set_property(TARGET HelloVulkan PROPERTY CXX_STANDARD 17)

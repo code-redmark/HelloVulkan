@@ -31,7 +31,9 @@ void VulkanCommandManager::create_command_pools(std::array<std::optional<int>, c
         VkResult res = vkCreateCommandPool(device, &info, nullptr, &pool);
         if (res != VK_SUCCESS)
         {
-            throw std::runtime_error("[VulkanCommandManager::VulkanCommandManager] ERROR: couldn't create command pool for family " + i);
+            char buff[100];
+            sprintf(buff, "[VulkanCommandManager::VulkanCommandManager] ERROR: couldn't create command pool for family %d", i);
+            throw std::runtime_error(buff);
         }
         
         this->pools[i] = pool;
