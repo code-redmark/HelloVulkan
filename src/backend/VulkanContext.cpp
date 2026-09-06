@@ -13,14 +13,14 @@ VulkanContext::VulkanContext(void* window_handle, ApplicationRequirements &requi
 	{
 		if (!create_instance())
 		{
-			throw std::runtime_error("[VulkanContext::VulkanContext] ERROR: Couldn't create VkInstance");
-		} else std::cout << "[VulkanContext::VulkanContext] OK: Created VkInstance\n";
+			GSAM_THROW_ERROR("Couldn't create VkInstance");
+		} else GSAM_LOG_INFO("Created VkInstance!");
 
 		#ifndef NDEBUG
 			if (!create_debug_messenger())
 			{
-				throw std::runtime_error("[VulkanContext::VulkanContext] ERROR: Couldn't create debug messenger");
-			} else std::cout << "[VulkanContext::VulkanContext] OK: Created debug messenger\n";
+				GSAM_THROW_ERROR("[VulkanContext::VulkanContext] ERROR: Couldn't create debug messenger");
+			} else GSAM_LOG_DEBUG("Created debug messenger");
 		#endif
 
 		if (!pick_device())

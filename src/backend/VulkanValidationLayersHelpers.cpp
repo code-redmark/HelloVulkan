@@ -54,7 +54,7 @@ bool VulkanContext::check_validation_layers_support()
     {
         if (strcmp(layer.layerName, "VK_LAYER_KHRONOS_validation") == 0)
 		{
-			std::cout << "[VulkanContext::check_validation_layers_support] INFO: found VK_LAYER_KHRONOS_validation\n";
+			GSAM_LOG_DEBUG("found VK_LAYER_KHRONOS_validation");
             return true;
 		}
     }

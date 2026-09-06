@@ -16,6 +16,9 @@ struct VulkanSwapchain;
 
 class VulkanContext
 {
+
+friend class VulkanSwapchain;
+
 private:
 
     VkDebugUtilsMessengerEXT debugMessenger = VK_NULL_HANDLE;
@@ -69,20 +72,21 @@ private:
     */
     bool create_surface(void* win_handle);
 
-
     /*
         Creates a "logical" device (VkDevice) through
         the context's physical_device
     */
     bool create_device(ApplicationRequirements& requirements);
     
+    /*
+        Creates a VMA Allocator
+    */
     bool setup_vma();
     
 public:
     VulkanContext(void* window_handle, ApplicationRequirements &requirements);
     void shutdown();
     
-friend class VulkanSwapchain;
 };
 
 
@@ -117,12 +121,37 @@ private:
 
 };
 
-struct VulkanSwapchain
+class VulkanSwapchain
 {
+
+private:
+
+// small functions to keep code away from constructor
+void createSwapchainKHR();
+
+const std::vector<VkImage>& get_images(); 
+
+void set_queue_families(const std::array<std::optional<int>, capability_count()>& queue_families_indices);
+
+void set_image_format();
+
+/*
+    Queries surface capabilities and gets all the data and information
+    the swapchain needs to get from it
+*/
+void set_surface_capability_info(VkPhysicalDevice physical_device, VkSurfaceKHR surface);
+
+void select_present_mode(VkPhysicalDevice physical_device, VkSurfaceKHR surface);
+
+void create_image_views();
+ 
+
+public:
 
 VkDevice device;
 
 VkSwapchainKHR swapchain;
+VkSwapchainCreateInfoKHR info;
 
 VkSharingMode sharing_mode;
 VkSurfaceFormatKHR image_format;
@@ -133,5 +162,7 @@ std::vector<VkImageView> image_views;
 
 VulkanSwapchain(VulkanContext& context);
 ~VulkanSwapchain();
+
+
 
 }; 
