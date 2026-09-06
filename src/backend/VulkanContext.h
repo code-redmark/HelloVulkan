@@ -126,6 +126,11 @@ class VulkanSwapchain
 
 private:
 
+/*
+    Only used at destruction time to free the depth image and its memory
+*/
+VmaAllocator& vma;
+
 // small functions to keep code away from constructor
 void createSwapchainKHR();
 
@@ -143,8 +148,18 @@ void set_surface_capability_info(VkPhysicalDevice physical_device, VkSurfaceKHR 
 
 void select_present_mode(VkPhysicalDevice physical_device, VkSurfaceKHR surface);
 
+/*
+    Creates image views for each of the swapchain's images
+*/
 void create_image_views();
- 
+
+VkFormat get_depth_format(VkPhysicalDevice physical_device);
+/*
+    Creates a depth image and image view
+*/
+void create_depth_attachment(VmaAllocator allocator);
+
+
 
 public:
 
@@ -159,6 +174,13 @@ VkColorSpaceKHR image_color_space;
 
 std::vector<VkImage> images;
 std::vector<VkImageView> image_views;
+
+VkFormat depth_format;
+
+VkImage depth_image;
+VmaAllocation depth_image_allocation;
+
+VkImageView depth_image_view;
 
 VulkanSwapchain(VulkanContext& context);
 ~VulkanSwapchain();

@@ -6,7 +6,7 @@
 #include <iostream>
 
 VulkanSwapchain::VulkanSwapchain(VulkanContext& context)
-    : swapchain(VK_NULL_HANDLE), device(context.device)
+    : swapchain(VK_NULL_HANDLE), device(context.device), vma(context.vma)
 {
     set_queue_families(context.queue_families_indices);
     set_surface_capability_info(context.physical_device, context.surface);
@@ -15,6 +15,9 @@ VulkanSwapchain::VulkanSwapchain(VulkanContext& context)
     createSwapchainKHR();
     
     create_image_views();
+
+    this->depth_format = get_depth_format(context.physical_device);
+    create_depth_attachment(context.vma);
 }
 
 VulkanSwapchain::~VulkanSwapchain()
@@ -23,6 +26,10 @@ VulkanSwapchain::~VulkanSwapchain()
     {
         vkDestroyImageView(this->device, view, nullptr);
     }
+
+    vkDestroyImageView(this->device, this->depth_image_view, nullptr);
+    vkDestroyImage(this->device, this->depth_image, nullptr);
+    vmaFreeMemory(this->vma, this->depth_image_allocation);
 
     vkDestroySwapchainKHR(this->device, this->swapchain, nullptr);
 }
@@ -171,4 +178,79 @@ void VulkanSwapchain::create_image_views()
         );
 
     }
+}
+
+VkFormat VulkanSwapchain::get_depth_format(VkPhysicalDevice physical_device)
+{
+    std::array<VkFormat, 2> depthFormats = {
+        VK_FORMAT_D32_SFLOAT_S8_UINT,
+        VK_FORMAT_D24_UNORM_S8_UINT
+    };
+    VkFormat chosen = VK_FORMAT_UNDEFINED;
+    for (VkFormat format : depthFormats) {
+        VkFormatProperties props;
+        vkGetPhysicalDeviceFormatProperties(physical_device, format, &props);
+        if (props.optimalTilingFeatures & VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT) {
+            chosen = format;
+            break;
+        }
+    }
+
+    if (chosen == VK_FORMAT_UNDEFINED) {
+        GSAM_THROW_ERROR("No suitable depth format found");
+    }
+
+    return chosen;
+}
+
+void VulkanSwapchain::create_depth_attachment(VmaAllocator allocator)
+{
+    VkImageCreateInfo imageInfo{};
+    imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+    imageInfo.imageType = VK_IMAGE_TYPE_2D;
+    imageInfo.format = this->depth_format;
+    // this window size shit is tormenting me
+    //depthImageCI.extent = {.width = static_cast<uint32_t>(windowSize.x), .height = static_cast<uint32_t>(windowSize.y), .depth = 1 };
+    imageInfo.extent = {.width = 800, .height = 600, .depth = 1 };
+    imageInfo.mipLevels = 1;
+    imageInfo.arrayLayers = 1;
+    imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+    imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+    imageInfo.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+    imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+
+    VmaAllocationCreateInfo allocInfo {
+    .flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT,
+    .usage = VMA_MEMORY_USAGE_AUTO
+    };
+
+    VkResult res = vmaCreateImage(
+        allocator, 
+        &imageInfo, 
+        &allocInfo, 
+        &this->depth_image, 
+        &this->depth_image_allocation, 
+        nullptr
+    );
+    GSAM_VK_CHECK(res, "Failed to create depth image");
+    GSAM_LOG_DEBUG("Depth image created");
+
+    VkImageViewCreateInfo viewInfo{};
+    viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+    viewInfo.image = this->depth_image;
+    viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+    viewInfo.format = this->depth_format;
+
+    VkImageSubresourceRange subresourceRange{};
+    subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+    subresourceRange.baseMipLevel = 0;
+    subresourceRange.levelCount = 1;
+    subresourceRange.layerCount = 1;
+
+    viewInfo.subresourceRange = subresourceRange;
+
+    VkResult viewRes = vkCreateImageView(this->device, &viewInfo, nullptr, &this->depth_image_view);
+    GSAM_VK_CHECK(viewRes, "Failed to create depth image view");
+
+    GSAM_LOG_DEBUG("Depth image view created");
 }
