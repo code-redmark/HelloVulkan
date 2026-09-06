@@ -11,57 +11,29 @@ VulkanContext::VulkanContext(void* window_handle, ApplicationRequirements &requi
 {
 	try  
 	{
-		if (!create_instance())
-		{
-			GSAM_THROW_ERROR("Couldn't create VkInstance");
-		} else GSAM_LOG_INFO("Created VkInstance!");
+		create_instance();
 
 		#ifndef NDEBUG
 			if (!create_debug_messenger())
 			{
-				GSAM_THROW_ERROR("[VulkanContext::VulkanContext] ERROR: Couldn't create debug messenger");
+				GSAM_THROW_ERROR("create debug messenger");
 			} else GSAM_LOG_DEBUG("Created debug messenger");
 		#endif
 
-		if (!pick_device())
-		{
-			throw std::runtime_error("[VulkanContext::VulkanContext] ERROR: Physical device not found.");
-		}
-		else std::cout << "[VulkanContext::VulkanContext] OK: Picked physical device\n";
+		pick_device();
 
-		if (!create_surface(window_handle))
-		{
-			throw std::runtime_error("[VulkanContext::VulkanContext] ERROR: Couldn't create surface.");
-		}
-		else std::cout << "[VulkanContext::VulkanContext] OK: Created surface\n";
+		create_surface(window_handle);
 
-		if (!create_device(requirements))
-		{
-			throw std::runtime_error("[VulkanContext::VulkanContext] ERROR: Couldn't create logical device.");
-		}
-		else std::cout << "[VulkanContext::VulkanContext] OK: Created logical device\n";
+		create_device(requirements);
 
-		if (!setup_vma())
-		{
-			throw std::runtime_error("[VulkanContext::VulkanContext] ERROR: Couldn't setup VMA");
-		} else std::cout << "[VulkanContext::VulkanContext] OK: Setup VMA\n";
+		setup_vma();
 
-		try
-		{
-			this->swapchain = std::make_unique<VulkanSwapchain>(*this);
-			std::cout << "[VulkanContext::VulkanContext] OK: Created swapchain\n";
-		}
-		catch(const std::runtime_error& e)
-		{
-			std::cerr << "[VulkanContext::VulkanContext] ERROR: Couldn't create swapchain:\n";
-			std::cerr << e.what() << '\n';
-		}
-
+		this->swapchain = std::make_unique<VulkanSwapchain>(*this);
 
 	}
 	catch (const std::runtime_error& err)
 	{
-		std::cerr << err.what();
+		std::cerr << err.what() << std::endl;
 		exit(-1);
 	}
 
@@ -98,7 +70,7 @@ void VulkanContext::shutdown()
 	}
 }
 
-bool VulkanContext::create_instance()
+void VulkanContext::create_instance()
 {
 	std::vector<const char*> extensions =
 	{
@@ -130,8 +102,8 @@ bool VulkanContext::create_instance()
 	std::vector<const char*> layers;
 	#ifndef NDEBUG
 		if (this->check_validation_layers_support()) layers.push_back("VK_LAYER_KHRONOS_validation");
-			else std::cout << "[VulkanContext::VulkanContext] INFO: Validation layers not supported\n";
-		std::cout << "[VulkanContext::VulkanContext] INFO: pushed VK_LAYER_KHRONOS_validation\n";
+			else GSAM_LOG_DEBUG("Validation layers not supported");
+		GSAM_LOG_DEBUG("pushed VK_LAYER_KHRONOS_validation");
 	#endif
 
 	VkApplicationInfo appInfo{};
@@ -154,11 +126,10 @@ bool VulkanContext::create_instance()
 
 
 	VkResult instanceResult = vkCreateInstance(&createInfo, nullptr, &this->instance);
-	if (instanceResult != VK_SUCCESS) return false;
-		else return true;
+	GSAM_VK_CHECK(instanceResult, "Failed to create VkInstance");
 }
 
-bool VulkanContext::pick_device()
+void VulkanContext::pick_device()
 {
 	uint32_t count;
 	vkEnumeratePhysicalDevices(instance, &count, nullptr);
@@ -166,7 +137,7 @@ bool VulkanContext::pick_device()
 	std::vector<VkPhysicalDevice> pDevices(count);
 	vkEnumeratePhysicalDevices(instance, &count, pDevices.data());
 
-	std::optional<std::string> selected = std::nullopt;
+	std::optional<std::string> selected_name = std::nullopt;
 
 	for (int i = 0; i < count; i++)
 	{
@@ -176,26 +147,25 @@ bool VulkanContext::pick_device()
 		if (this->physical_device == VK_NULL_HANDLE && prop.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU)
 		{
 			this->physical_device = pDevices[i];
-			selected = prop.deviceName;
+			selected_name = prop.deviceName;
 			break;
 		}
 	}
 
-	if (selected.has_value()) {
-		std::cout << "[VulkanContext::pick_device] INFO: Selected " << selected.value() << "\n";
+	if (selected_name.has_value()) {
+		GSAM_LOG_INFO("Selected discrete GPU: " + selected_name.value());
+		return;
 	}
 
 	if (this->physical_device == VK_NULL_HANDLE) 
 	{
 		if (!pDevices.empty())
 		{
-			std::cout << "No discrete GPU found. Falling back to first device found\n";
+			GSAM_LOG_INFO("No discrete GPU found. Falling back to first device found");
 			this->physical_device = pDevices[0];
-			return true;
 		}
-		else return false;
+		else GSAM_THROW_ERROR("No physical device found");
 	}
-	else return true;
 
 }
 
@@ -204,7 +174,7 @@ bool VulkanContext::pick_device()
 	the window handle can come from any window library, in fact it is a
 	void pointer
 */
-bool VulkanContext::create_surface(void* win_handle)
+void VulkanContext::create_surface(void* win_handle)
 {
 	VkWin32SurfaceCreateInfoKHR info{};
 	info.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
@@ -214,15 +184,10 @@ bool VulkanContext::create_surface(void* win_handle)
 	info.hwnd = (HWND)win_handle;
 
 	VkResult creationResult = vkCreateWin32SurfaceKHR(this->instance, &info, nullptr, &this->surface);
-
-
-
-	if (creationResult == VK_SUCCESS) return true;
-
-	return false;
+	GSAM_VK_CHECK(creationResult, "Failed to create Win32 surface");
 }
 
-bool VulkanContext::create_device(ApplicationRequirements& requirements)
+void VulkanContext::create_device(ApplicationRequirements& requirements)
 {
 	uint32_t fam_count;
 	vkGetPhysicalDeviceQueueFamilyProperties(this->physical_device, &fam_count, nullptr);
@@ -267,8 +232,8 @@ bool VulkanContext::create_device(ApplicationRequirements& requirements)
 			
 				if (supported == VK_TRUE && requestResult == VK_SUCCESS)
 				{
-					this->queue_families_indices[enum_index(FamilyCapability::Presentation)] = i;
-				} else std::cout << "queue family " << i << " can't do presentation\n";
+					this->queue_families_indices[enum_index(FamilyCapability::Presentation)] = i;	
+				} 
 
 				used = true;
 				int count = requirements.queue_requirement(FamilyCapability::Presentation);
@@ -294,9 +259,9 @@ bool VulkanContext::create_device(ApplicationRequirements& requirements)
 	{
 		if (requirements.requires(index_enum<FamilyCapability>(i)) && !this->queue_families_indices[i].has_value()) 
 		{
-			std::cerr << "[VulkanContext::create_device] ERROR: queue families couldn't satisfy application requirements\n";
-			return false;
+			GSAM_THROW_ERROR("Available queue families couldn't satisfy application requirements");
 		}
+
 	}
 
 	VkPhysicalDeviceVulkan12Features Vk12Features{};
@@ -333,16 +298,11 @@ bool VulkanContext::create_device(ApplicationRequirements& requirements)
 	info.flags = 0;
 
 	VkResult deviceResult = vkCreateDevice(this->physical_device, &info, nullptr, &this->device);
-	if (deviceResult != VK_SUCCESS) 
-	{
-		std::cerr << "[VulkanContext::create_device] ERROR: vkCreateDevice failed\n";
-		return false;
-	}
+	GSAM_VK_CHECK(deviceResult, "Failed to create logical device");
 	
-	return true;
 }
 
-bool VulkanContext::setup_vma()
+void VulkanContext::setup_vma()
 {
 	VmaVulkanFunctions vkFunctions{};
 	vkFunctions.vkGetInstanceProcAddr = vkGetInstanceProcAddr;;
@@ -357,8 +317,7 @@ bool VulkanContext::setup_vma()
 	info.instance = instance;
 
 	VkResult res = vmaCreateAllocator(&info, &this->vma);
-	if (res != VK_SUCCESS) return false;
-		else return true;
+	GSAM_VK_CHECK(res, "Failed to create VMA Allocator");
 }
 
 

@@ -8,21 +8,13 @@
 VulkanSwapchain::VulkanSwapchain(VulkanContext& context)
     : swapchain(VK_NULL_HANDLE), device(context.device)
 {
-    try
-    {
-        set_queue_families(context.queue_families_indices);
-        set_surface_capability_info(context.physical_device, context.surface);
-        set_image_format();
+    set_queue_families(context.queue_families_indices);
+    set_surface_capability_info(context.physical_device, context.surface);
+    set_image_format();
 
-        createSwapchainKHR();
-        
-        create_image_views();
-    }
-
-    catch(const std::runtime_error& err)
-    {
-        std::cerr << err.what() << '\n';
-    }
+    createSwapchainKHR();
+    
+    create_image_views();
 }
 
 VulkanSwapchain::~VulkanSwapchain()

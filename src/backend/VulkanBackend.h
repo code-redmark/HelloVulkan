@@ -20,11 +20,11 @@
     #define GSAM_FUNC_NAME __func__ // Fallback
 #endif
 
-#define GSAM_LOG_INFO(msg) std::cout << "[" << GSAM_FUNC_NAME << "] INFO: " << msg << "\n"
+#define GSAM_LOG_INFO(msg) std::cout << "\n[" << GSAM_FUNC_NAME << "] INFO: " << msg << "\n"
 
 #ifndef NDEBUG
     #define GSAM_LOG_DEBUG(msg) \
-        std::cout << "[" << GSAM_FUNC_NAME << "] DEBUG: " << msg << "\n"
+        std::cout << "\n[" << GSAM_FUNC_NAME << "] DEBUG: " << msg << "\n"
 #else
     #define GSAM_LOG_DEBUG(msg) \
         do {} while(0)
@@ -32,7 +32,7 @@
 
 #define GSAM_THROW_ERROR(msg) throw std::runtime_error(std::string("[") + GSAM_FUNC_NAME +  std::string("] ERROR: ") + std::string(msg))
 
-#define GSAM_VK_CHECK(result, msg) if (result != VK_SUCCESS) GSAM_THROW_ERROR(msg);
+#define GSAM_VK_CHECK(result, err_msg) if (result != VK_SUCCESS) GSAM_THROW_ERROR(err_msg);
 
 enum class FamilyCapability
 {

@@ -5,11 +5,9 @@ VulkanCommandManager::VulkanCommandManager(std::array<std::optional<int>, capabi
     try
     {
         create_command_pools(queue_families_indices, device);
-
-
     } catch (const std::runtime_error& err)
     {
-        std::cerr << "[VulkanCommandManager::VulkanCommandManager] ERROR: " << err.what() << "\n";
+        std::cerr << err.what() << "\n";
     }
 }
 
@@ -29,15 +27,10 @@ void VulkanCommandManager::create_command_pools(std::array<std::optional<int>, c
         info.queueFamilyIndex = static_cast<uint32_t>(queue_families_indices[i].value()); 
 
         VkResult res = vkCreateCommandPool(device, &info, nullptr, &pool);
-        if (res != VK_SUCCESS)
-        {
-            char buff[100];
-            sprintf(buff, "[VulkanCommandManager::VulkanCommandManager] ERROR: couldn't create command pool for family %d", i);
-            throw std::runtime_error(buff);
-        }
-        
+        GSAM_VK_CHECK(res, "create command pool for family " + std::to_string(i));
+
         this->pools[i] = pool;
     }
 
-    std::cout << "[VulkanCommandManager::create_command_pools] OK: created command pools\n";
+    GSAM_LOG_DEBUG("created command pools");
 }

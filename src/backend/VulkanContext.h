@@ -58,30 +58,30 @@ private:
         Creates a VkInstance for the user's platform and
         its specific extensions
     */
-    bool create_instance();
+    void create_instance();
 
     /*
         Finds a physical GPU device to run the application,
         returns true if it was found
     */
-    bool pick_device();
+    void pick_device();
 
     /*
         Creates a surface to make Vulkan communicate with our
         window manager
     */
-    bool create_surface(void* win_handle);
+    void create_surface(void* win_handle);
 
     /*
         Creates a "logical" device (VkDevice) through
         the context's physical_device
     */
-    bool create_device(ApplicationRequirements& requirements);
+    void create_device(ApplicationRequirements& requirements);
     
     /*
         Creates a VMA Allocator
     */
-    bool setup_vma();
+    void setup_vma();
     
 public:
     VulkanContext(void* window_handle, ApplicationRequirements &requirements);
