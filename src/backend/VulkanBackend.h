@@ -1,5 +1,7 @@
 #pragma once
 
+
+
 /*
 	needed to get the VK_KHR_win32_Surface extension, in GSAM we're going to 
 	select the right one based on the user's OS, im on Windows so WIN32
@@ -8,6 +10,7 @@
 
 #include <vulkan/vulkan.h>
 #include "deps/vma.h"
+#include <glm/glm.hpp>
 
 #include <array>
 #include <utility>
@@ -33,6 +36,17 @@
 #define GSAM_THROW_ERROR(msg) throw std::runtime_error(std::string("[") + GSAM_FUNC_NAME +  std::string("] ERROR: ") + std::string(msg))
 
 #define GSAM_VK_CHECK(result, err_msg) if (result != VK_SUCCESS) GSAM_THROW_ERROR(err_msg);
+
+struct Vertex {
+    glm::vec3 pos;
+    glm::vec3 normal;
+    glm::vec2 uv;
+};
+
+struct MeshData {
+    std::vector<Vertex> vertices;
+    std::vector<uint16_t> indices;
+};
 
 enum class FamilyCapability
 {

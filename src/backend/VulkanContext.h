@@ -185,6 +185,8 @@ VkImageView depth_image_view;
 VulkanSwapchain(VulkanContext& context);
 ~VulkanSwapchain();
 
+void LoadMesh_Obj(std::string path);
+
 
 
 }; 
