@@ -82,11 +82,19 @@ private:
         Creates a VMA Allocator
     */
     void setup_vma();
+
+    ResourceRegistry meshRegistry;
+    std::vector<ResourceHandle> meshHandles;
+
+    VkMeshData LoadMesh_Obj(std::string path);
+    VkGpuMesh UploadMesh(const VkMeshData& data);
     
 public:
     VulkanContext(void* window_handle, ApplicationRequirements &requirements);
     void shutdown();
-    
+
+    ResourceHandle CreateMesh(std::string path);
+
 };
 
 
@@ -126,15 +134,10 @@ class VulkanSwapchain
 
 private:
 
-/*
-    Only used at destruction time to free the depth image and its memory
-*/
-VmaAllocator& vma;
-
 // small functions to keep code away from constructor
-void createSwapchainKHR();
+void createSwapchainKHR(const VkDevice& device);
 
-const std::vector<VkImage>& get_images(); 
+const std::vector<VkImage>& get_images(const VkDevice& device); 
 
 void set_queue_families(const std::array<std::optional<int>, capability_count()>& queue_families_indices);
 
@@ -151,19 +154,17 @@ void select_present_mode(VkPhysicalDevice physical_device, VkSurfaceKHR surface)
 /*
     Creates image views for each of the swapchain's images
 */
-void create_image_views();
+void create_image_views(const VkDevice& device);
 
 VkFormat get_depth_format(VkPhysicalDevice physical_device);
 /*
     Creates a depth image and image view
 */
-void create_depth_attachment(VmaAllocator allocator);
+void create_depth_attachment(const VkDevice& device, VmaAllocator allocator);
 
 
 
 public:
-
-VkDevice device;
 
 VkSwapchainKHR swapchain;
 VkSwapchainCreateInfoKHR info;
@@ -183,10 +184,6 @@ VmaAllocation depth_image_allocation;
 VkImageView depth_image_view;
 
 VulkanSwapchain(VulkanContext& context);
-~VulkanSwapchain();
-
-void LoadMesh_Obj(std::string path);
-
-
+void Free(const VmaAllocator& vma, const VkDevice& device);
 
 }; 

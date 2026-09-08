@@ -16,3 +16,7 @@ int ApplicationRequirements::queue_requirement(FamilyCapability capability) cons
 	return requirements[static_cast<int>(capability)].second; 
 }
 
+void VkGpuMesh::destroyBuffer(VmaAllocator vma)
+{
+	vmaDestroyBuffer(vma, this->buffer, this->allocation);
+}

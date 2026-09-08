@@ -3,6 +3,8 @@
 #include <iostream>
 
 #include <optional>
+#include <fstream>
+#include <filesystem>
 
 
 
@@ -42,8 +44,27 @@ VulkanContext::VulkanContext(void* window_handle, ApplicationRequirements &requi
 
 void VulkanContext::shutdown()
 {
+	GSAM_VK_CHECK(vkDeviceWaitIdle(this->device), "Failed to wait for idle, something is broken");
 
-	this->swapchain->~VulkanSwapchain();
+	this->swapchain->Free(this->vma, this->device);
+
+	for (ResourceHandle handle : meshHandles)
+	{
+		void* memory = this->meshRegistry.Access(handle);
+		VkGpuMesh* mesh = static_cast<VkGpuMesh*>(memory);
+
+		GSAM_LOG_DEBUG(
+			"Destroying Buffer: " + std::to_string((uint64_t)(mesh->buffer))
+		);
+		GSAM_LOG_DEBUG(
+			"Destroying Allocation: " + std::to_string((uint64_t)(mesh->allocation))
+		);
+
+		mesh->destroyBuffer(this->vma);
+		
+		this->meshRegistry.Release(handle);
+	}
+	vmaDestroyAllocator(this->vma);
 
 	if (this->device != VK_NULL_HANDLE)
 	{
@@ -58,7 +79,6 @@ void VulkanContext::shutdown()
     reinterpret_cast<PFN_vkDestroyDebugUtilsMessengerEXT>(
         vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT")
     );
-
 	if (destroyDebugMessenger)
 	{
 		destroyDebugMessenger(instance, this->debugMessenger, nullptr);
@@ -318,6 +338,154 @@ void VulkanContext::setup_vma()
 
 	VkResult res = vmaCreateAllocator(&info, &this->vma);
 	GSAM_VK_CHECK(res, "Failed to create VMA Allocator");
+}
+
+VkMeshData VulkanContext::LoadMesh_Obj(std::string path)
+{
+	tinyobj::attrib_t attrib;
+	std::vector<tinyobj::shape_t> shapes;
+	std::vector<tinyobj::material_t> materials;
+
+	std::string err;
+
+	std::ifstream stream(path);
+	if (!stream.is_open()) GSAM_THROW_ERROR("Couldn't open " + path);
+
+	if (tinyobj::LoadObj(&attrib, &shapes, &materials, &err, &stream, nullptr, true) != true)
+		GSAM_THROW_ERROR("Couldn't load obj " + path + "\ntinyobj error: " + err);
+
+	stream.close();
+
+	VkMeshData data;
+
+	const VkDeviceSize indexCount = shapes[0].mesh.indices.size();
+	for (const auto& index : shapes[0].mesh.indices)
+	{
+		Vertex v{
+        	.pos = { attrib.vertices[index.vertex_index * 3], -attrib.vertices[index.vertex_index * 3 + 1], attrib.vertices[index.vertex_index * 3 + 2] },
+        	.normal = { attrib.normals[index.normal_index * 3], -attrib.normals[index.normal_index * 3 + 1], attrib.normals[index.normal_index * 3 + 2] },
+        	.uv = { attrib.texcoords[index.texcoord_index * 2], 1.0 - attrib.texcoords[index.texcoord_index * 2 + 1] }
+    	};
+    	data.vertices.push_back(v);
+    	data.indices.push_back(data.indices.size());
+	}
+
+	return data;
+}
+
+
+VkGpuMesh VulkanContext::UploadMesh(const VkMeshData& data)
+{
+	VkDeviceSize vertBufferSize = data.vertices.size() * sizeof(Vertex);
+	VkDeviceSize indexBufferSize = data.indices.size() * sizeof(uint16_t);
+
+
+	VkBufferCreateInfo bufferCreateInfo {
+		.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+		.size = vertBufferSize + indexBufferSize,
+		.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT
+	};
+	VmaAllocationCreateInfo bufferAllocInfo{
+		.flags = 
+		VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | 
+		VMA_ALLOCATION_CREATE_HOST_ACCESS_ALLOW_TRANSFER_INSTEAD_BIT |
+
+		/*
+			VMA_ALLOCATION_CREATE_MAPPED_BIT gets us a persistently mapped buffer, which in turn lets us directly copy data into VRAM
+			with memcpy (How to Vulkan 2026)
+		*/
+		VMA_ALLOCATION_CREATE_MAPPED_BIT,
+		.usage = VMA_MEMORY_USAGE_AUTO
+	};
+	VmaAllocationInfo vBufferAllocInfo{};
+	
+	VkBuffer buffer;
+	VmaAllocation allocation;
+	VmaAllocationInfo allocation_info;
+
+
+	GSAM_VK_CHECK(
+		vmaCreateBuffer(this->vma, &bufferCreateInfo, &bufferAllocInfo, &buffer, &allocation, &allocation_info), 
+		"Couldn't allocate VMA buffer"
+	);
+
+	VkGpuMesh gMesh =
+	{
+		.buffer = buffer,
+		.allocation = allocation,
+		.vertex_offset = 0,
+		.index_offset = vertBufferSize,
+		.index_count = static_cast<uint32_t>(data.indices.size())
+	};
+
+	return gMesh;
+}
+
+/*
+	Temporary function, this wont be an option in GSAM, which
+	needs to create a lower level API based on buffers etc.
+*/
+ResourceHandle VulkanContext::CreateMesh(std::string path)
+{
+	try
+	{
+		std::string ext = std::filesystem::path(path).extension().string();
+
+		std::optional<VkMeshData> cpuData = std::nullopt;
+		std::optional<VkGpuMesh> gpuMesh = std::nullopt;
+
+		bool supported = false;
+		if (ext == ".obj")
+		{
+			supported = true;
+			cpuData = this->LoadMesh_Obj(path);
+		} else GSAM_LOG_DEBUG(ext + " is different than .obj");
+
+		if (cpuData.has_value())
+		{
+			gpuMesh = UploadMesh(cpuData.value());
+			GSAM_LOG_DEBUG(
+				"Created Buffer: " +
+				std::to_string((uint64_t)gpuMesh->buffer)
+			);
+			GSAM_LOG_DEBUG(
+				"Created Allocation: " +
+				std::to_string((uint64_t)gpuMesh->allocation)
+			);
+		} else {
+			if (supported)
+			{
+				GSAM_THROW_ERROR("Couldn't load " + path);
+			} else
+			{
+				GSAM_THROW_ERROR(ext + "isn't a supported mesh format");
+			}
+		}
+
+		if (gpuMesh.has_value())
+		{
+			try 
+			{
+				ResourceHandle handle = this->meshRegistry.Allocate();
+				void* memory = this->meshRegistry.Access(handle);
+				memcpy(memory, &(*gpuMesh), sizeof(VkGpuMesh));
+
+				this->meshHandles.push_back(handle);
+				return handle;
+			} catch (const std::runtime_error& err)
+			{
+				GSAM_LOG_ERROR(err.what());
+				gpuMesh->destroyBuffer(this->vma);
+			}
+			
+		} else GSAM_THROW_ERROR("Couldn't upload GPU mesh " + path);
+
+	} catch (const std::runtime_error& err)
+	{
+		std::cout << err.what() << "\n";
+	}
+
+	return ResourceHandle();
 }
 
 

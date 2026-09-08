@@ -2,6 +2,7 @@
 project ("HelloVulkan")
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+set(CXX_STANDARD_REQUIRED 17)
 
 find_package(Vulkan REQUIRED)
 

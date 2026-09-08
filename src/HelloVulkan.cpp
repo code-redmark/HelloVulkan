@@ -5,6 +5,7 @@
 #include "Umbrella.h"
 
 #include <iostream>
+#include <ctime>
 
 static RGFW_window* RGFWSetup()
 {
@@ -17,6 +18,9 @@ static RGFW_window* RGFWSetup()
 
 int main(void)
 {  
+
+	std::cout << "Hello World!\n";
+
 	RGFW_window* window = RGFWSetup();
 	
 	ApplicationRequirements requirements;
@@ -24,6 +28,8 @@ int main(void)
 	requirements.set_requirement(FamilyCapability::Presentation, true, 1);
 	
 	VulkanContext context(RGFW_window_getHWND(window), requirements);	
+
+	context.CreateMesh("assets/tree.obj");
 
 	while (!RGFW_window_shouldClose(window))
 	{

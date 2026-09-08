@@ -1,51 +1,39 @@
 #pragma once
 
-
-
 /*
 	needed to get the VK_KHR_win32_Surface extension, in GSAM we're going to 
 	select the right one based on the user's OS, im on Windows so WIN32
 */
 #define VK_USE_PLATFORM_WIN32_KHR
-
 #include <vulkan/vulkan.h>
+
+#include "deps/srcs/GSAMStuff/GSAMStuff.hpp"
 #include "deps/vma.h"
 #include <glm/glm.hpp>
+
+#include "deps/srcs/tinyobj/tiny_obj_loader.h"
 
 #include <array>
 #include <utility>
 
-#if defined(__GNUC__) || defined(__clang__)
-    #define GSAM_FUNC_NAME __PRETTY_FUNCTION__
-#elif defined(_MSC_VER)
-    #define GSAM_FUNC_NAME __FUNCSIG__
-#else
-    #define GSAM_FUNC_NAME __func__ // Fallback
-#endif
-
-#define GSAM_LOG_INFO(msg) std::cout << "\n[" << GSAM_FUNC_NAME << "] INFO: " << msg << "\n"
-
-#ifndef NDEBUG
-    #define GSAM_LOG_DEBUG(msg) \
-        std::cout << "\n[" << GSAM_FUNC_NAME << "] DEBUG: " << msg << "\n"
-#else
-    #define GSAM_LOG_DEBUG(msg) \
-        do {} while(0)
-#endif
-
-#define GSAM_THROW_ERROR(msg) throw std::runtime_error(std::string("[") + GSAM_FUNC_NAME +  std::string("] ERROR: ") + std::string(msg))
-
 #define GSAM_VK_CHECK(result, err_msg) if (result != VK_SUCCESS) GSAM_THROW_ERROR(err_msg);
 
-struct Vertex {
-    glm::vec3 pos;
-    glm::vec3 normal;
-    glm::vec2 uv;
-};
-
-struct MeshData {
+struct VkMeshData {
     std::vector<Vertex> vertices;
     std::vector<uint16_t> indices;
+};
+
+struct VkGpuMesh
+{
+    VkBuffer buffer;
+    VmaAllocation allocation;
+    
+    VkDeviceSize vertex_offset;
+    VkDeviceSize index_offset;
+
+    uint32_t index_count;
+
+    void destroyBuffer(VmaAllocator vma);
 };
 
 enum class FamilyCapability
