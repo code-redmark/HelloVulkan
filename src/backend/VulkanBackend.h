@@ -18,22 +18,61 @@
 
 #define GSAM_VK_CHECK(result, err_msg) if (result != VK_SUCCESS) GSAM_THROW_ERROR(err_msg);
 
-struct VkMeshData {
+struct VulkanBuffer
+{
+    VkBuffer buffer{};
+    VmaAllocation allocation{};
+    VmaAllocationInfo allocationInfo{};
+
+    VulkanBuffer() = default;
+    VulkanBuffer(VmaAllocator allocator, VkBufferCreateInfo bufferCreateInfo, VmaAllocationCreateInfo bufferAllocInfo);
+};
+
+struct VulkanMeshData {
     std::vector<Vertex> vertices;
     std::vector<uint16_t> indices;
 };
 
-struct VkGpuMesh
+struct VulkanGpuMesh
 {
-    VkBuffer buffer;
-    VmaAllocation allocation;
+    VkBuffer buffer = VK_NULL_HANDLE;
+    VmaAllocation allocation{};
     
-    VkDeviceSize vertex_offset;
-    VkDeviceSize index_offset;
+    VkDeviceSize vertex_offset{};
+    VkDeviceSize index_offset{};
 
-    uint32_t index_count;
+    uint32_t index_count{};
 
     void destroyBuffer(VmaAllocator vma);
+};
+
+struct ShaderData {
+    glm::mat4 projection;
+    glm::mat4 view;
+    glm::mat4 model[3];
+    glm::vec4 lightPos{ 0.0f, -10.0f, 10.0f, 0.0f };
+    uint32_t selected{1};
+};
+
+struct ShaderDataBuffer
+{
+    VulkanBuffer buffer{};
+    VkDeviceAddress deviceAddress = 0;
+
+    ShaderDataBuffer(VmaAllocator allocator, const VkDevice& device);
+};
+
+struct VulkanFrame
+{
+    uint32_t index{};
+
+    VkCommandBuffer commandBuffer{};
+    ShaderDataBuffer shaderBuffer;
+
+    VkFence fence{};
+    VkSemaphore semaphore{};
+
+    void Free(VmaAllocator vma);
 };
 
 enum class FamilyCapability

@@ -11,6 +11,8 @@
 #include <set>
 
 class VulkanCommandManager;
+class VulkanSyncManager;
+
 struct VulkanSwapchain;
 
 
@@ -20,6 +22,8 @@ class VulkanContext
 friend class VulkanSwapchain;
 
 private:
+
+    const int MAX_FRAMES_IN_FLIGHT = 2;
 
     VkDebugUtilsMessengerEXT debugMessenger = VK_NULL_HANDLE;
 
@@ -83,11 +87,26 @@ private:
     */
     void setup_vma();
 
+    /*
+        Creates [MAX_FRAMES_IN_FLIGHT] VulkanFrames, assumes the instance's commandManager and syncManager
+        have already been initialized and will be produce errors if called before
+    */
+    void create_frames();
+
     ResourceRegistry meshRegistry;
     std::vector<ResourceHandle> meshHandles;
 
-    VkMeshData LoadMesh_Obj(std::string path);
-    VkGpuMesh UploadMesh(const VkMeshData& data);
+    // VkFrame data and functions
+
+    std::unique_ptr<VulkanCommandManager> commandManager;
+    std::unique_ptr<VulkanSyncManager> syncManager;
+
+    std::vector<VulkanFrame> frames;
+    std::optional<VulkanFrame> CreateFrame();
+
+
+    VulkanMeshData LoadMesh_Obj(std::string path);
+    VulkanGpuMesh UploadMesh(const VulkanMeshData& data);
     
 public:
     VulkanContext(void* window_handle, ApplicationRequirements &requirements);
@@ -106,7 +125,7 @@ class VulkanCommandManager
 {
 
 friend class VulkanContext;
-    
+
 private:
 
     /*
@@ -122,11 +141,34 @@ private:
         families
     */
     void create_command_pools(std::array<std::optional<int>, capability_count()> queue_families_indices, const VkDevice& device);
+    
+public:
+
+VulkanCommandManager(std::array<std::optional<int>, capability_count()> queue_families_indices, const VkDevice& device, const int max_frames_in_flight);
+void Free(const VkDevice& device);
+
+VkCommandBuffer get_frame_command_buffer(VulkanFrame& frame);
+VkCommandBuffer create_command_buffer(const VkDevice& device, FamilyCapability family_pool);
 
 
-    VulkanCommandManager(std::array<std::optional<int>, capability_count()> queue_families_indices, const VkDevice& device);
 
+};
 
+class VulkanSyncManager
+{
+private:
+    std::vector<VkFence> fences;
+    std::vector<VkSemaphore> semaphores;
+
+public:
+    VulkanSyncManager(const VkDevice& device, const int max_frames_in_flight);
+    void Free(const VkDevice& device);
+
+    VkFence get_frame_fence(const uint32_t frame_index);
+    VkFence get_frame_fence(const VulkanFrame& frame);
+
+    VkSemaphore get_frame_semaphore(const uint32_t frame_index);
+    VkSemaphore get_frame_semaphore(const VulkanFrame& frame);
 };
 
 class VulkanSwapchain

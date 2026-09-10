@@ -9,7 +9,14 @@
 
 
 VulkanContext::VulkanContext(void* window_handle, ApplicationRequirements &requirements)
-	: instance(VK_NULL_HANDLE), physical_device(VK_NULL_HANDLE), surface(VK_NULL_HANDLE), device(VK_NULL_HANDLE), queue_families_indices({std::nullopt}), swapchain(nullptr)
+	: instance(VK_NULL_HANDLE), 
+	physical_device(VK_NULL_HANDLE), 
+	surface(VK_NULL_HANDLE), 
+	device(VK_NULL_HANDLE), 
+	queue_families_indices({std::nullopt}), 
+	swapchain(nullptr),
+	commandManager(nullptr),
+	syncManager(nullptr)
 {
 	try  
 	{
@@ -31,6 +38,10 @@ VulkanContext::VulkanContext(void* window_handle, ApplicationRequirements &requi
 		setup_vma();
 
 		this->swapchain = std::make_unique<VulkanSwapchain>(*this);
+		this->commandManager = std::make_unique<VulkanCommandManager>(this->queue_families_indices, this->device, MAX_FRAMES_IN_FLIGHT);
+		this->syncManager = std::make_unique<VulkanSyncManager>(this->device, MAX_FRAMES_IN_FLIGHT);
+
+		create_frames();
 
 	}
 	catch (const std::runtime_error& err)
@@ -46,18 +57,19 @@ void VulkanContext::shutdown()
 {
 	GSAM_VK_CHECK(vkDeviceWaitIdle(this->device), "Failed to wait for idle, something is broken");
 
+	for (VulkanFrame frame : this->frames)
+	{
+		frame.Free(this->vma);
+	}
+
+	this->commandManager->Free(this->device);
+	this->syncManager->Free(this->device);
+
 	this->swapchain->Free(this->vma, this->device);
 
 	for (const ResourceHandle& handle : meshHandles)
 	{
-		VkGpuMesh* mesh = this->meshRegistry.Get<VkGpuMesh>(handle);
-
-		GSAM_LOG_DEBUG(
-			"Destroying Buffer: " + std::to_string((uint64_t)(mesh->buffer))
-		);
-		GSAM_LOG_DEBUG(
-			"Destroying Allocation: " + std::to_string((uint64_t)(mesh->allocation))
-		);
+		VulkanGpuMesh* mesh = this->meshRegistry.Get<VulkanGpuMesh>(handle);
 
 		mesh->destroyBuffer(this->vma);
 		
@@ -321,6 +333,16 @@ void VulkanContext::create_device(ApplicationRequirements& requirements)
 	
 }
 
+void VulkanContext::create_frames()
+{
+	this->frames.reserve(MAX_FRAMES_IN_FLIGHT); // not resizing otherwise everything get fucked up with the indices
+	for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
+	{
+		std::optional<VulkanFrame> frame = this->CreateFrame();
+		this->frames.push_back(*frame);
+	}
+}
+
 void VulkanContext::setup_vma()
 {
 	VmaVulkanFunctions vkFunctions{};
@@ -339,7 +361,7 @@ void VulkanContext::setup_vma()
 	GSAM_VK_CHECK(res, "Failed to create VMA Allocator");
 }
 
-VkMeshData VulkanContext::LoadMesh_Obj(std::string path)
+VulkanMeshData VulkanContext::LoadMesh_Obj(std::string path)
 {
 	tinyobj::attrib_t attrib;
 	std::vector<tinyobj::shape_t> shapes;
@@ -355,7 +377,7 @@ VkMeshData VulkanContext::LoadMesh_Obj(std::string path)
 
 	stream.close();
 
-	VkMeshData data;
+	VulkanMeshData data;
 
 	const VkDeviceSize indexCount = shapes[0].mesh.indices.size();
 	for (const auto& index : shapes[0].mesh.indices)
@@ -392,7 +414,7 @@ VkMeshData VulkanContext::LoadMesh_Obj(std::string path)
 }
 
 
-VkGpuMesh VulkanContext::UploadMesh(const VkMeshData& data)
+VulkanGpuMesh VulkanContext::UploadMesh(const VulkanMeshData& data)
 {
 	VkDeviceSize vertBufferSize = data.vertices.size() * sizeof(Vertex);
 	VkDeviceSize indexBufferSize = data.indices.size() * sizeof(uint16_t);
@@ -427,7 +449,7 @@ VkGpuMesh VulkanContext::UploadMesh(const VkMeshData& data)
 		"Couldn't allocate VMA buffer"
 	);
 
-	VkGpuMesh gMesh =
+	VulkanGpuMesh gMesh =
 	{
 		.buffer = buffer,
 		.allocation = allocation,
@@ -449,8 +471,8 @@ ResourceHandle VulkanContext::CreateMesh(std::string path)
 	{
 		std::string ext = std::filesystem::path(path).extension().string();
 
-		std::optional<VkMeshData> cpuData = std::nullopt;
-		std::optional<VkGpuMesh> gpuMesh = std::nullopt;
+		std::optional<VulkanMeshData> cpuData = std::nullopt;
+		std::optional<VulkanGpuMesh> gpuMesh = std::nullopt;
 
 		bool supported = false;
 		if (ext == ".obj")
@@ -462,14 +484,6 @@ ResourceHandle VulkanContext::CreateMesh(std::string path)
 		if (cpuData.has_value())
 		{
 			gpuMesh = UploadMesh(cpuData.value());
-			GSAM_LOG_DEBUG(
-				"Created Buffer: " +
-				std::to_string((uint64_t)gpuMesh->buffer)
-			);
-			GSAM_LOG_DEBUG(
-				"Created Allocation: " +
-				std::to_string((uint64_t)gpuMesh->allocation)
-			);
 		} else {
 			if (supported)
 			{
@@ -503,6 +517,29 @@ ResourceHandle VulkanContext::CreateMesh(std::string path)
 	}
 
 	return ResourceHandle();
+}
+
+std::optional<VulkanFrame> VulkanContext::CreateFrame()
+{
+	try
+	{
+		uint32_t size = static_cast<uint32_t>(this->frames.size());
+
+		VulkanFrame frame{
+			.index = size,
+			.commandBuffer = this->commandManager->create_command_buffer(this->device, FamilyCapability::Graphics),
+			.shaderBuffer = ShaderDataBuffer(this->vma, this->device),
+			
+			.fence = this->syncManager->get_frame_fence(size),
+			.semaphore = this->syncManager->get_frame_semaphore(size)
+		};
+		
+		return frame;
+	} catch (const std::runtime_error& err)
+	{
+		GSAM_LOG_ERROR(err.what());
+	}
+	return std::nullopt;
 }
 
 

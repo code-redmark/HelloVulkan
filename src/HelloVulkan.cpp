@@ -20,7 +20,7 @@ int main(void)
 {  
 
 	std::cout << "Hello World!\n";
-	std::cout << "sizeof(VkGPuMesh): " << sizeof(VkGpuMesh) << "\n";
+	std::cout << "sizeof(VkGPuMesh): " << sizeof(VulkanGpuMesh) << "\n";
 
 	RGFW_window* window = RGFWSetup();
 	

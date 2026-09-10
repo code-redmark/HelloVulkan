@@ -1,13 +1,25 @@
 #include "VulkanContext.h"
 
-VulkanCommandManager::VulkanCommandManager(std::array<std::optional<int>, capability_count()> queue_families_indices, const VkDevice& device)
+VulkanCommandManager::VulkanCommandManager(std::array<std::optional<int>, capability_count()> queue_families_indices, const VkDevice& device, const int max_frames_in_flight)
 {
+    this->commandBuffers.resize(max_frames_in_flight);
+
     try
     {
         create_command_pools(queue_families_indices, device);
     } catch (const std::runtime_error& err)
     {
         std::cerr << err.what() << "\n";
+    }
+}
+
+void VulkanCommandManager::Free(const VkDevice& device)
+{
+    for (std::optional<VkCommandPool> pool : this->pools)
+    {
+        if (!pool.has_value()) continue;
+
+        vkDestroyCommandPool(device, pool.value(), nullptr);
     }
 }
 
@@ -33,4 +45,36 @@ void VulkanCommandManager::create_command_pools(std::array<std::optional<int>, c
     }
 
     GSAM_LOG_DEBUG("created command pools");
+}
+
+VkCommandBuffer VulkanCommandManager::get_frame_command_buffer(VulkanFrame& frame)
+{
+    if (frame.index >= this->commandBuffers.size())
+    {
+        GSAM_THROW_ERROR("frame index " + std::to_string(frame.index) + " is out of bounds for command buffer array");
+    }
+
+    return this->commandBuffers[frame.index];
+}
+
+VkCommandBuffer VulkanCommandManager::create_command_buffer(const VkDevice& device, FamilyCapability family_pool)
+{
+    if (!this->pools[enum_index(family_pool)].has_value())
+    {
+        GSAM_THROW_ERROR("command pool for family " + std::to_string(enum_index(family_pool)) + " doesn't exist");
+    }
+
+    VkCommandBufferAllocateInfo info{};
+    info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    info.pNext = nullptr;
+    info.commandPool = this->pools[enum_index(family_pool)].value();
+    info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+    info.commandBufferCount = 1;
+
+    VkCommandBuffer buffer;
+
+    VkResult res = vkAllocateCommandBuffers(device, &info, &buffer);
+    GSAM_VK_CHECK(res, "Couldn't allocate command buffer for family " + std::to_string(enum_index(family_pool)));
+
+    return buffer;
 }
