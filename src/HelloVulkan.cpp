@@ -20,6 +20,7 @@ int main(void)
 {  
 
 	std::cout << "Hello World!\n";
+	std::cout << "sizeof(VkGPuMesh): " << sizeof(VkGpuMesh) << "\n";
 
 	RGFW_window* window = RGFWSetup();
 	
@@ -30,7 +31,7 @@ int main(void)
 	VulkanContext context(RGFW_window_getHWND(window), requirements);	
 
 	context.CreateMesh("assets/tree.obj");
-
+	
 	while (!RGFW_window_shouldClose(window))
 	{
 		RGFW_event event;

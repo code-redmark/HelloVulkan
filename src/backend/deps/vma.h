@@ -9,4 +9,8 @@
 
 #pragma clang diagnostic pop
 
+#else
+
+#include "srcs/vma/vk_mem_alloc.h"
+
 #endif

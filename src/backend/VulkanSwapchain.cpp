@@ -142,6 +142,8 @@ void VulkanSwapchain::createSwapchainKHR(const VkDevice& device)
     this->info.oldSwapchain = VK_NULL_HANDLE;
     this->info.pNext = nullptr;
 
+    this->info.flags = 0;
+
     GSAM_VK_CHECK(vkCreateSwapchainKHR(device, &this->info, nullptr, &this->swapchain), "Failed to create swapchain");
 
 

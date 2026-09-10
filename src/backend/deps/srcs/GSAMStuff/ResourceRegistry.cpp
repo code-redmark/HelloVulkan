@@ -53,3 +53,4 @@ void* ResourceRegistry::Access(const ResourceHandle& handle)
 	// if something goes bad put back those ifs here and look at it again
 	return this->resource_pool[handle.id].slotData;
 }
+

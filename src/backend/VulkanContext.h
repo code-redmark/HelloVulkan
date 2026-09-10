@@ -167,7 +167,7 @@ void create_depth_attachment(const VkDevice& device, VmaAllocator allocator);
 public:
 
 VkSwapchainKHR swapchain;
-VkSwapchainCreateInfoKHR info;
+VkSwapchainCreateInfoKHR info{};
 
 VkSharingMode sharing_mode;
 VkSurfaceFormatKHR image_format;

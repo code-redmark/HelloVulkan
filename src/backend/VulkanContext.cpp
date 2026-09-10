@@ -48,10 +48,9 @@ void VulkanContext::shutdown()
 
 	this->swapchain->Free(this->vma, this->device);
 
-	for (ResourceHandle handle : meshHandles)
+	for (const ResourceHandle& handle : meshHandles)
 	{
-		void* memory = this->meshRegistry.Access(handle);
-		VkGpuMesh* mesh = static_cast<VkGpuMesh*>(memory);
+		VkGpuMesh* mesh = this->meshRegistry.Get<VkGpuMesh>(handle);
 
 		GSAM_LOG_DEBUG(
 			"Destroying Buffer: " + std::to_string((uint64_t)(mesh->buffer))
@@ -362,10 +361,29 @@ VkMeshData VulkanContext::LoadMesh_Obj(std::string path)
 	for (const auto& index : shapes[0].mesh.indices)
 	{
 		Vertex v{
-        	.pos = { attrib.vertices[index.vertex_index * 3], -attrib.vertices[index.vertex_index * 3 + 1], attrib.vertices[index.vertex_index * 3 + 2] },
-        	.normal = { attrib.normals[index.normal_index * 3], -attrib.normals[index.normal_index * 3 + 1], attrib.normals[index.normal_index * 3 + 2] },
-        	.uv = { attrib.texcoords[index.texcoord_index * 2], 1.0 - attrib.texcoords[index.texcoord_index * 2 + 1] }
-    	};
+			.pos = {
+				attrib.vertices[index.vertex_index * 3], 
+				-attrib.vertices[index.vertex_index * 3 + 1], 
+				attrib.vertices[index.vertex_index * 3 + 2] 
+			}
+		};
+		if (index.normal_index >= 0)
+		{
+			v.normal = {
+				attrib.normals[index.normal_index * 3],
+				-attrib.normals[index.normal_index * 3 + 1],
+				attrib.normals[index.normal_index * 3 + 2]
+			};
+		}
+		if (index.texcoord_index >= 0)
+		{
+			v.uv = {
+				attrib.texcoords[index.texcoord_index * 2],
+				1.0 - attrib.texcoords[index.texcoord_index * 2 + 1]
+			};
+		}
+
+
     	data.vertices.push_back(v);
     	data.indices.push_back(data.indices.size());
 	}
@@ -467,8 +485,7 @@ ResourceHandle VulkanContext::CreateMesh(std::string path)
 			try 
 			{
 				ResourceHandle handle = this->meshRegistry.Allocate();
-				void* memory = this->meshRegistry.Access(handle);
-				memcpy(memory, &(*gpuMesh), sizeof(VkGpuMesh));
+				this->meshRegistry.Set(handle, *gpuMesh);
 
 				this->meshHandles.push_back(handle);
 				return handle;
