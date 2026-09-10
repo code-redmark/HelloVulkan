@@ -20,18 +20,7 @@ VulkanSwapchain::VulkanSwapchain(VulkanContext& context)
     create_depth_attachment(context.device, context.vma);
 }
 
-void VulkanSwapchain::Free(const VmaAllocator& vma, const VkDevice& device)
-{
-    for (VkImageView view : this->image_views)
-    {
-        vkDestroyImageView(device, view, nullptr);
-    }
 
-    vmaDestroyImage(vma, this->depth_image, this->depth_image_allocation);
-    vkDestroyImageView(device, this->depth_image_view, nullptr);
-
-    vkDestroySwapchainKHR(device, this->swapchain, nullptr);
-}
 
 void VulkanSwapchain::set_queue_families(const std::array<std::optional<int>, capability_count()>& queue_families_indices)
 {
@@ -254,4 +243,17 @@ void VulkanSwapchain::create_depth_attachment(const VkDevice& device, VmaAllocat
     GSAM_VK_CHECK(viewRes, "Failed to create depth image view");
 
     GSAM_LOG_DEBUG("Depth image view created");
+}
+
+void VulkanSwapchain::Free(const VmaAllocator& vma, const VkDevice& device)
+{
+    for (VkImageView view : this->image_views)
+    {
+        vkDestroyImageView(device, view, nullptr);
+    }
+
+    vmaDestroyImage(vma, this->depth_image, this->depth_image_allocation);
+    vkDestroyImageView(device, this->depth_image_view, nullptr);
+
+    vkDestroySwapchainKHR(device, this->swapchain, nullptr);
 }

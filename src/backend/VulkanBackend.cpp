@@ -23,11 +23,6 @@ ShaderDataBuffer::ShaderDataBuffer(VmaAllocator allocator, const VkDevice& devic
 	this->deviceAddress = vkGetBufferDeviceAddress(device, &deviceAddressInfo);
 }
 
-void VulkanFrame::Free(VmaAllocator vma)
-{
-	vmaDestroyBuffer(vma, this->shaderBuffer.buffer.buffer, this->shaderBuffer.buffer.allocation);
-}
-
 bool ApplicationRequirements::requires(FamilyCapability capability) const
 {
 	return requirements[static_cast<int>(capability)].first;
@@ -44,7 +39,12 @@ int ApplicationRequirements::queue_requirement(FamilyCapability capability) cons
 	return requirements[static_cast<int>(capability)].second; 
 }
 
-void VulkanGpuMesh::destroyBuffer(VmaAllocator vma)
+void VulkanGpuMesh::Free(VmaAllocator vma)
 {
 	vmaDestroyBuffer(vma, this->buffer, this->allocation);
+}
+
+void VulkanFrame::Free(VmaAllocator vma)
+{
+	vmaDestroyBuffer(vma, this->shaderBuffer.buffer.buffer, this->shaderBuffer.buffer.allocation);
 }

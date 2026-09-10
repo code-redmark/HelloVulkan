@@ -1,6 +1,7 @@
 ﻿#pragma once
 
 #include "VulkanBackend.h"
+#include "VulkanCleaner.h"
 
 #include <iostream>
 #include <vector>
@@ -20,6 +21,7 @@ class VulkanContext
 {
 
 friend class VulkanSwapchain;
+friend class VulkanCleaner;
 
 private:
 
@@ -108,6 +110,8 @@ private:
     VulkanMeshData LoadMesh_Obj(std::string path);
     VulkanGpuMesh UploadMesh(const VulkanMeshData& data);
     
+    VulkanCleaner cleaner = VulkanCleaner(*this);
+
 public:
     VulkanContext(void* window_handle, ApplicationRequirements &requirements);
     void shutdown();

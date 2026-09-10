@@ -43,7 +43,7 @@ struct VulkanGpuMesh
 
     uint32_t index_count{};
 
-    void destroyBuffer(VmaAllocator vma);
+    void Free(VmaAllocator vma);
 };
 
 struct ShaderData {

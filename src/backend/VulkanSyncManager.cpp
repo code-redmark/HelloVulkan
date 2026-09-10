@@ -29,17 +29,7 @@ VulkanSyncManager::VulkanSyncManager(const VkDevice& device, const int max_frame
     GSAM_LOG_DEBUG("Initialized Synchonization Objects");
 }
 
-void VulkanSyncManager::Free(const VkDevice& device)
-{
-    for (VkFence fence : this->fences)
-    {
-        vkDestroyFence(device, fence, nullptr);
-    }
-    for (VkSemaphore sem : this->semaphores)
-    {
-        vkDestroySemaphore(device, sem, nullptr);
-    }
-}
+
 
 VkFence VulkanSyncManager::get_frame_fence(const uint32_t frame_index)
 {
@@ -58,4 +48,16 @@ VkSemaphore VulkanSyncManager::get_frame_semaphore(const uint32_t frame_index)
 VkSemaphore VulkanSyncManager::get_frame_semaphore(const VulkanFrame& frame)
 {
     return this->semaphores[frame.index];
+}
+
+void VulkanSyncManager::Free(const VkDevice& device)
+{
+    for (VkFence fence : this->fences)
+    {
+        vkDestroyFence(device, fence, nullptr);
+    }
+    for (VkSemaphore sem : this->semaphores)
+    {
+        vkDestroySemaphore(device, sem, nullptr);
+    }
 }

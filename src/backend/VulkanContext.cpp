@@ -56,49 +56,12 @@ VulkanContext::VulkanContext(void* window_handle, ApplicationRequirements &requi
 void VulkanContext::shutdown()
 {
 	GSAM_VK_CHECK(vkDeviceWaitIdle(this->device), "Failed to wait for idle, something is broken");
-
-	for (VulkanFrame frame : this->frames)
-	{
-		frame.Free(this->vma);
-	}
-
-	this->commandManager->Free(this->device);
-	this->syncManager->Free(this->device);
-
-	this->swapchain->Free(this->vma, this->device);
-
-	for (const ResourceHandle& handle : meshHandles)
-	{
-		VulkanGpuMesh* mesh = this->meshRegistry.Get<VulkanGpuMesh>(handle);
-
-		mesh->destroyBuffer(this->vma);
-		
-		this->meshRegistry.Release(handle);
-	}
-	vmaDestroyAllocator(this->vma);
-
-	if (this->device != VK_NULL_HANDLE)
-	{
-		vkDestroyDevice(this->device, nullptr);
-	}
-	if (this->surface != VK_NULL_HANDLE)
-	{
-		vkDestroySurfaceKHR(this->instance, this->surface, nullptr);
-	}
-
-	PFN_vkDestroyDebugUtilsMessengerEXT destroyDebugMessenger =
-    reinterpret_cast<PFN_vkDestroyDebugUtilsMessengerEXT>(
-        vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT")
-    );
-	if (destroyDebugMessenger)
-	{
-		destroyDebugMessenger(instance, this->debugMessenger, nullptr);
-	}
-
-	if (this->instance != VK_NULL_HANDLE) {
-		vkDestroyInstance(this->instance, nullptr);
-		this->instance = VK_NULL_HANDLE;
-	}
+	
+	this->cleaner.FreeAssets();
+	this->cleaner.FreeVulkanObjects();
+	this->cleaner.FreeManagers();
+	this->cleaner.FreeCore();
+	this->cleaner.FreeInstance();
 }
 
 void VulkanContext::create_instance()
@@ -506,7 +469,7 @@ ResourceHandle VulkanContext::CreateMesh(std::string path)
 			} catch (const std::runtime_error& err)
 			{
 				GSAM_LOG_ERROR(err.what());
-				gpuMesh->destroyBuffer(this->vma);
+				gpuMesh->Free(this->vma);
 			}
 			
 		} else GSAM_THROW_ERROR("Couldn't upload GPU mesh " + path);

@@ -13,15 +13,7 @@ VulkanCommandManager::VulkanCommandManager(std::array<std::optional<int>, capabi
     }
 }
 
-void VulkanCommandManager::Free(const VkDevice& device)
-{
-    for (std::optional<VkCommandPool> pool : this->pools)
-    {
-        if (!pool.has_value()) continue;
 
-        vkDestroyCommandPool(device, pool.value(), nullptr);
-    }
-}
 
 void VulkanCommandManager::create_command_pools(std::array<std::optional<int>, capability_count()> queue_families_indices, const VkDevice& device)
 {
@@ -77,4 +69,14 @@ VkCommandBuffer VulkanCommandManager::create_command_buffer(const VkDevice& devi
     GSAM_VK_CHECK(res, "Couldn't allocate command buffer for family " + std::to_string(enum_index(family_pool)));
 
     return buffer;
+}
+
+void VulkanCommandManager::Free(const VkDevice& device)
+{
+    for (std::optional<VkCommandPool> pool : this->pools)
+    {
+        if (!pool.has_value()) continue;
+
+        vkDestroyCommandPool(device, pool.value(), nullptr);
+    }
 }
