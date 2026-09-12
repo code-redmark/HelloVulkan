@@ -17,7 +17,6 @@ ResourceHandle ResourceRegistry::Allocate()
 	}
 	else 
 	{
-		std::cout << free_pool[0];
 		this->resource_pool[this->free_pool.back()].isAlive = true;
 		handle.generation = this->resource_pool[this->free_pool.back()].generation;
 		handle.id = this->free_pool.back();
@@ -53,4 +52,6 @@ void* ResourceRegistry::Access(const ResourceHandle& handle)
 	// if something goes bad put back those ifs here and look at it again
 	return this->resource_pool[handle.id].slotData;
 }
+
+
 

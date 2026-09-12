@@ -7,8 +7,8 @@
 #include <memory>
 #include <iostream>
 #include <cstring>
+#include <optional>
 
-class GSContext;
 
 struct ResourceSlot
 {
@@ -62,3 +62,4 @@ public:
 	}
 
 };
+
