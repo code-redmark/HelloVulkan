@@ -1,11 +1,14 @@
-#include "VulkanContext.h"
+#include "VulkanBackend.h"
+
+#include "Context.h"
+#include "Swapchain.h"
 
 #include <set>
 #include <vector>
 #include <stdexcept>
 #include <iostream>
 
-VulkanSwapchain::VulkanSwapchain(VulkanContext& context)
+VulkanBackend::Swapchain::Swapchain(Context& context)
     : swapchain(VK_NULL_HANDLE)
 {
     set_queue_families(context.queue_families_indices);
@@ -14,15 +17,15 @@ VulkanSwapchain::VulkanSwapchain(VulkanContext& context)
 
     createSwapchainKHR(context.device);
     
-    create_image_views(context.device);
+    create_surface_image_views(context.device);
 
-    this->depth_format = get_depth_format(context.physical_device);
-    create_depth_attachment(context.device, context.vma);
+    this->depth_image_format = get_depth_format(context.physical_device);
+    create_depth_attachment(context);
 }
 
 
 
-void VulkanSwapchain::set_queue_families(const std::array<std::optional<int>, capability_count()>& queue_families_indices)
+void VulkanBackend::Swapchain::set_queue_families(const std::array<std::optional<int>, GSAM::Vulkan::capability_count()>& queue_families_indices)
 {
     if (queue_families_indices.size() < 1) GSAM_THROW_ERROR("Invalid queue_families_indices passed (size = " + std::to_string(queue_families_indices.size()) + ")");
         
@@ -49,13 +52,13 @@ void VulkanSwapchain::set_queue_families(const std::array<std::optional<int>, ca
     this->info.pQueueFamilyIndices = pQueueFamilyIndices;
 }
 
-void VulkanSwapchain::set_image_format()
+void VulkanBackend::Swapchain::set_image_format()
 {
     this->image_format.format = VK_FORMAT_B8G8R8A8_SRGB;
     this->image_format.colorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
 }
 
-void VulkanSwapchain::set_surface_capability_info(VkPhysicalDevice physical_device, VkSurfaceKHR surface)
+void VulkanBackend::Swapchain::set_surface_capability_info(VkPhysicalDevice physical_device, VkSurfaceKHR surface)
 {
     this->info.surface = surface;
 
@@ -84,7 +87,7 @@ void VulkanSwapchain::set_surface_capability_info(VkPhysicalDevice physical_devi
 
 }
 
-void VulkanSwapchain::select_present_mode(VkPhysicalDevice physical_device, VkSurfaceKHR surface)
+void VulkanBackend::Swapchain::select_present_mode(VkPhysicalDevice physical_device, VkSurfaceKHR surface)
 {
     uint32_t presentModeCount = 0;
     VkResult res = vkGetPhysicalDeviceSurfacePresentModesKHR(physical_device, surface, &presentModeCount, nullptr);
@@ -107,17 +110,16 @@ void VulkanSwapchain::select_present_mode(VkPhysicalDevice physical_device, VkSu
     }
 }
 
-const std::vector<VkImage>& VulkanSwapchain::get_images(const VkDevice& device)
+void VulkanBackend::Swapchain::get_surface_images(const VkDevice& device)
 {
     uint32_t imgCount = 0;
     vkGetSwapchainImagesKHR(device, this->swapchain, &imgCount, nullptr);
-    this->images.resize(imgCount);
-    vkGetSwapchainImagesKHR(device, this->swapchain, &imgCount, this->images.data());
+    this->surface_images.resize(imgCount);
+    vkGetSwapchainImagesKHR(device, this->swapchain, &imgCount, this->surface_images.data());
 
-    return this->images;
 }
 
-void VulkanSwapchain::createSwapchainKHR(const VkDevice& device)
+void VulkanBackend::Swapchain::createSwapchainKHR(const VkDevice& device)
 {
     this->info.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
     this->info.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
@@ -139,11 +141,10 @@ void VulkanSwapchain::createSwapchainKHR(const VkDevice& device)
     GSAM_LOG_DEBUG("Swapchain created");
 }
 
-void VulkanSwapchain::create_image_views(const VkDevice& device)
+void VulkanBackend::Swapchain::create_surface_image_views(const VkDevice& device)
 {
-    const std::vector<VkImage>& imgs = this->get_images(device);   
-
-    this->image_views.resize(imgs.size());
+    const auto& imgs = this->surface_images;
+    this->surface_image_views.resize(imgs.size());
     for (uint32_t i = 0; i < imgs.size(); i++) {
         VkImageViewCreateInfo viewInfo{};
         viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
@@ -163,42 +164,41 @@ void VulkanSwapchain::create_image_views(const VkDevice& device)
         viewInfo.subresourceRange.layerCount = 1;
 
         GSAM_VK_CHECK(
-            vkCreateImageView(device, &viewInfo, nullptr, &this->image_views[i]), 
+            vkCreateImageView(device, &viewInfo, nullptr, &this->surface_image_views[i]), 
             "Error creating image view " + std::to_string(i)
         );
 
     }
 }
 
-VkFormat VulkanSwapchain::get_depth_format(VkPhysicalDevice physical_device)
+VkFormat VulkanBackend::Swapchain::get_depth_format(VkPhysicalDevice physical_device)
 {
     std::array<VkFormat, 2> depthFormats = {
         VK_FORMAT_D32_SFLOAT_S8_UINT,
         VK_FORMAT_D24_UNORM_S8_UINT
     };
-    VkFormat chosen = VK_FORMAT_UNDEFINED;
     for (VkFormat format : depthFormats) {
         VkFormatProperties props;
         vkGetPhysicalDeviceFormatProperties(physical_device, format, &props);
         if (props.optimalTilingFeatures & VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT) {
-            chosen = format;
+            this->depth_image_format = format;
             break;
         }
     }
 
-    if (chosen == VK_FORMAT_UNDEFINED) {
+    if (this->depth_image_format == VK_FORMAT_UNDEFINED) {
         GSAM_THROW_ERROR("No suitable depth format found");
     }
 
-    return chosen;
+    return this->depth_image_format;
 }
 
-void VulkanSwapchain::create_depth_attachment(const VkDevice& device, VmaAllocator allocator)
+void VulkanBackend::Swapchain::create_depth_attachment(VulkanBackend::Context& context)
 {
     VkImageCreateInfo imageInfo{};
     imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
     imageInfo.imageType = VK_IMAGE_TYPE_2D;
-    imageInfo.format = this->depth_format;
+    imageInfo.format = this->depth_image_format;
     // this window size shit is tormenting me
     //depthImageCI.extent = {.width = static_cast<uint32_t>(windowSize.x), .height = static_cast<uint32_t>(windowSize.y), .depth = 1 };
     imageInfo.extent = {.width = 800, .height = 600, .depth = 1 };
@@ -214,22 +214,26 @@ void VulkanSwapchain::create_depth_attachment(const VkDevice& device, VmaAllocat
     .usage = VMA_MEMORY_USAGE_AUTO
     };
 
+
+    GpuImage out;
     VkResult res = vmaCreateImage(
-        allocator, 
+        context.vma, 
         &imageInfo, 
         &allocInfo, 
-        &this->depth_image, 
-        &this->depth_image_allocation, 
+        &out.image, 
+        &out.allocation, 
         nullptr
     );
     GSAM_VK_CHECK(res, "Failed to create depth image");
     GSAM_LOG_DEBUG("Depth image created");
 
+    vmaSetAllocationName(context.vma, out.allocation, "Depth attachment image");
+
     VkImageViewCreateInfo viewInfo{};
     viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-    viewInfo.image = this->depth_image;
+    viewInfo.image = out.image;
     viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-    viewInfo.format = this->depth_format;
+    viewInfo.format = this->depth_image_format;
 
     VkImageSubresourceRange subresourceRange{};
     subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
@@ -239,21 +243,27 @@ void VulkanSwapchain::create_depth_attachment(const VkDevice& device, VmaAllocat
 
     viewInfo.subresourceRange = subresourceRange;
 
-    VkResult viewRes = vkCreateImageView(device, &viewInfo, nullptr, &this->depth_image_view);
+    VkResult viewRes = vkCreateImageView(context.device, &viewInfo, nullptr, &out.imageView);
     GSAM_VK_CHECK(viewRes, "Failed to create depth image view");
+
+    
+    TypedResourceHandle<GpuImage> handle = context.imageRegistry.Allocate();
+    context.imageRegistry.Set(handle, out);
+    context.imageHandles.push_back(handle);
 
     GSAM_LOG_DEBUG("Depth image view created");
 }
 
-void VulkanSwapchain::Free(const VmaAllocator& vma, const VkDevice& device)
+void VulkanBackend::Swapchain::Free(const VmaAllocator& vma, const VkDevice& device)
 {
-    for (VkImageView view : this->image_views)
+    for (VkImageView s_view : this->surface_image_views)
     {
-        vkDestroyImageView(device, view, nullptr);
+        vkDestroyImageView(device, s_view, nullptr);
     }
-
-    vmaDestroyImage(vma, this->depth_image, this->depth_image_allocation);
-    vkDestroyImageView(device, this->depth_image_view, nullptr);
+    for (VkImage s_img : this->surface_images)
+    {
+        vkDestroyImage(device, s_img, nullptr);
+    }
 
     vkDestroySwapchainKHR(device, this->swapchain, nullptr);
 }

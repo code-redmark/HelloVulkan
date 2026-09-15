@@ -1,14 +1,14 @@
 #pragma once
 
-class VulkanContext;
+#include "VulkanBackend.h"
 
-class VulkanCleaner 
+class VulkanBackend::Cleaner 
 {
 private:
-    VulkanContext& context;
+    Context& context;
 
 public:
-    VulkanCleaner(VulkanContext& context);
+    Cleaner(Context& context);
 
     /*
         Frees meshes, textures, etc.

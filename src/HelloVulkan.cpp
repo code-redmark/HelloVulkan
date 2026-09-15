@@ -18,17 +18,17 @@ static RGFW_window* RGFWSetup()
 
 int main(void)
 {  
-
+	std::cout << __cplusplus << '\n';
 	std::cout << "Hello World!\n";
-	std::cout << "sizeof(VkGPuMesh): " << sizeof(VulkanGpuMesh) << "\n";
+	std::cout << "sizeof(VkGPuMesh): " << sizeof(VulkanBackend::GpuMesh) << "\n";
 
 	RGFW_window* window = RGFWSetup();
 	
-	ApplicationRequirements requirements;
-	requirements.set_requirement(FamilyCapability::Graphics, true, 1);
-	requirements.set_requirement(FamilyCapability::Presentation, true, 1);
+	GSAM::Vulkan::ApplicationRequirements requirements;
+	requirements.set_requirement(GSAM::Vulkan::QueueFamilyCapability::Graphics, true, 1);
+	requirements.set_requirement(GSAM::Vulkan::QueueFamilyCapability::Presentation, true, 1);
 	
-	VulkanContext context(RGFW_window_getHWND(window), requirements);	
+	VulkanBackend::Context context(RGFW_window_getHWND(window), requirements);	
 
 	context.CreateMesh("assets/tree.obj");
 	

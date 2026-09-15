@@ -1,6 +1,6 @@
-#include "VulkanContext.h"
+#include "CommandManager.h"
 
-VulkanCommandManager::VulkanCommandManager(std::array<std::optional<int>, capability_count()> queue_families_indices, const VkDevice& device, const int max_frames_in_flight)
+VulkanBackend::CommandManager::CommandManager(std::array<std::optional<int>, GSAM::Vulkan::capability_count()> queue_families_indices, const VkDevice& device, const int max_frames_in_flight)
 {
     this->commandBuffers.resize(max_frames_in_flight);
 
@@ -15,7 +15,7 @@ VulkanCommandManager::VulkanCommandManager(std::array<std::optional<int>, capabi
 
 
 
-void VulkanCommandManager::create_command_pools(std::array<std::optional<int>, capability_count()> queue_families_indices, const VkDevice& device)
+void VulkanBackend::CommandManager::create_command_pools(std::array<std::optional<int>, GSAM::Vulkan::capability_count()> queue_families_indices, const VkDevice& device)
 {
     VkCommandPoolCreateInfo info{};
     info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
@@ -39,7 +39,7 @@ void VulkanCommandManager::create_command_pools(std::array<std::optional<int>, c
     GSAM_LOG_DEBUG("created command pools");
 }
 
-VkCommandBuffer VulkanCommandManager::get_frame_command_buffer(VulkanFrame& frame)
+VkCommandBuffer VulkanBackend::CommandManager::get_frame_command_buffer(Frame& frame)
 {
     if (frame.index >= this->commandBuffers.size())
     {
@@ -49,7 +49,7 @@ VkCommandBuffer VulkanCommandManager::get_frame_command_buffer(VulkanFrame& fram
     return this->commandBuffers[frame.index];
 }
 
-VkCommandBuffer VulkanCommandManager::create_command_buffer(const VkDevice& device, FamilyCapability family_pool)
+VkCommandBuffer VulkanBackend::CommandManager::create_command_buffer(const VkDevice& device, GSAM::Vulkan::QueueFamilyCapability family_pool)
 {
     if (!this->pools[enum_index(family_pool)].has_value())
     {
@@ -71,7 +71,7 @@ VkCommandBuffer VulkanCommandManager::create_command_buffer(const VkDevice& devi
     return buffer;
 }
 
-void VulkanCommandManager::Free(const VkDevice& device)
+void VulkanBackend::CommandManager::Free(const VkDevice& device)
 {
     for (std::optional<VkCommandPool> pool : this->pools)
     {

@@ -1,14 +1,13 @@
 #pragma once
 
-#include "Types.hpp"
-
-#include <cstdint>
 #include <vector>
-#include <memory>
-#include <iostream>
-#include <cstring>
-#include <optional>
+#include <cstdint>
 
+struct ResourceHandle
+{
+	uint32_t generation;
+	uint64_t id;
+};
 
 struct ResourceSlot
 {

@@ -1,5 +1,8 @@
 #pragma once
 
+#include <iostream>
+#include <stdexcept>
+
 #define GSAM_LOG_INFO(msg) std::cout << "\n[" << GSAM_FUNC_NAME << "] INFO: " << msg << "\n"
 
 #ifndef NDEBUG

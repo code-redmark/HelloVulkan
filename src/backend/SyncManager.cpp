@@ -1,9 +1,9 @@
-#include "VulkanContext.h"
+#include "SyncManager.h"
 
 /*
     creates a fence and a semaphore for each frame in flight
 */
-VulkanSyncManager::VulkanSyncManager(const VkDevice& device, const int max_frames_in_flight)
+VulkanBackend::SyncManager::SyncManager(const VkDevice& device, const int max_frames_in_flight)
 {
     this->fences.resize(max_frames_in_flight);
     for (VkFence& fence : this->fences)
@@ -31,26 +31,26 @@ VulkanSyncManager::VulkanSyncManager(const VkDevice& device, const int max_frame
 
 
 
-VkFence VulkanSyncManager::get_frame_fence(const uint32_t frame_index)
+VkFence VulkanBackend::SyncManager::get_frame_fence(const uint32_t frame_index)
 {
     return this->fences[frame_index];
 }
 
-VkFence VulkanSyncManager::get_frame_fence(const VulkanFrame& frame)
+VkFence VulkanBackend::SyncManager::get_frame_fence(const Frame& frame)
 {
     return this->fences[frame.index];
 }
 
-VkSemaphore VulkanSyncManager::get_frame_semaphore(const uint32_t frame_index)
+VkSemaphore VulkanBackend::SyncManager::get_frame_semaphore(const uint32_t frame_index)
 {
     return this->semaphores[frame_index];
 }
-VkSemaphore VulkanSyncManager::get_frame_semaphore(const VulkanFrame& frame)
+VkSemaphore VulkanBackend::SyncManager::get_frame_semaphore(const Frame& frame)
 {
     return this->semaphores[frame.index];
 }
 
-void VulkanSyncManager::Free(const VkDevice& device)
+void VulkanBackend::SyncManager::Free(const VkDevice& device)
 {
     for (VkFence fence : this->fences)
     {

@@ -1,14 +1,11 @@
-#include "VulkanContext.h"
-#include "VulkanBackend.h"
-#include <iostream>
+#include "Context.h"
 
-#include <optional>
-#include <fstream>
-#include <filesystem>
+#include "Swapchain.h"
+#include "CommandManager.h"
+#include "SyncManager.h"
+#include "Cleaner.h"
 
-
-
-VulkanContext::VulkanContext(void* window_handle, ApplicationRequirements &requirements)
+VulkanBackend::Context::Context(void* window_handle, GSAM::Vulkan::ApplicationRequirements &requirements)
 	: instance(VK_NULL_HANDLE), 
 	physical_device(VK_NULL_HANDLE), 
 	surface(VK_NULL_HANDLE), 
@@ -16,17 +13,15 @@ VulkanContext::VulkanContext(void* window_handle, ApplicationRequirements &requi
 	queue_families_indices({std::nullopt}), 
 	swapchain(nullptr),
 	commandManager(nullptr),
-	syncManager(nullptr)
+	syncManager(nullptr),
+	cleaner(std::make_unique<Cleaner>(*this))
 {
 	try  
 	{
 		create_instance();
 
 		#ifndef NDEBUG
-			if (!create_debug_messenger())
-			{
-				GSAM_THROW_ERROR("create debug messenger");
-			} else GSAM_LOG_DEBUG("Created debug messenger");
+			create_debug_messenger();
 		#endif
 
 		pick_device();
@@ -37,9 +32,9 @@ VulkanContext::VulkanContext(void* window_handle, ApplicationRequirements &requi
 
 		setup_vma();
 
-		this->swapchain = std::make_unique<VulkanSwapchain>(*this);
-		this->commandManager = std::make_unique<VulkanCommandManager>(this->queue_families_indices, this->device, MAX_FRAMES_IN_FLIGHT);
-		this->syncManager = std::make_unique<VulkanSyncManager>(this->device, MAX_FRAMES_IN_FLIGHT);
+		this->swapchain = std::make_unique<Swapchain>(*this);
+		this->commandManager = std::make_unique<CommandManager>(this->queue_families_indices, this->device, MAX_FRAMES_IN_FLIGHT);
+		this->syncManager = std::make_unique<SyncManager>(this->device, MAX_FRAMES_IN_FLIGHT);
 
 		create_frames();
 
@@ -53,18 +48,18 @@ VulkanContext::VulkanContext(void* window_handle, ApplicationRequirements &requi
 
 }
 
-void VulkanContext::shutdown()
+void VulkanBackend::Context::shutdown()
 {
 	GSAM_VK_CHECK(vkDeviceWaitIdle(this->device), "Failed to wait for idle, something is broken");
 	
-	this->cleaner.FreeAssets();
-	this->cleaner.FreeVulkanObjects();
-	this->cleaner.FreeManagers();
-	this->cleaner.FreeCore();
-	this->cleaner.FreeInstance();
+	this->cleaner->FreeAssets();
+	this->cleaner->FreeVulkanObjects();
+	this->cleaner->FreeManagers();
+	this->cleaner->FreeCore();
+	this->cleaner->FreeInstance();
 }
 
-void VulkanContext::create_instance()
+void VulkanBackend::Context::create_instance()
 {
 	std::vector<const char*> extensions =
 	{
@@ -91,7 +86,6 @@ void VulkanContext::create_instance()
 	#elif defined(__APPLE__)
 		extensions.push_back(VK_KHR_METAL_SURFACE_EXTENSION_NAME);
 	#endif
-
 
 	std::vector<const char*> layers;
 	#ifndef NDEBUG
@@ -123,7 +117,7 @@ void VulkanContext::create_instance()
 	GSAM_VK_CHECK(instanceResult, "Failed to create VkInstance");
 }
 
-void VulkanContext::pick_device()
+void VulkanBackend::Context::pick_device()
 {
 	uint32_t count;
 	vkEnumeratePhysicalDevices(instance, &count, nullptr);
@@ -168,7 +162,7 @@ void VulkanContext::pick_device()
 	the window handle can come from any window library, in fact it is a
 	void pointer
 */
-void VulkanContext::create_surface(void* win_handle)
+void VulkanBackend::Context::create_surface(void* win_handle)
 {
 	VkWin32SurfaceCreateInfoKHR info{};
 	info.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
@@ -181,7 +175,7 @@ void VulkanContext::create_surface(void* win_handle)
 	GSAM_VK_CHECK(creationResult, "Failed to create Win32 surface");
 }
 
-void VulkanContext::create_device(ApplicationRequirements& requirements)
+void VulkanBackend::Context::create_device(GSAM::Vulkan::ApplicationRequirements& requirements)
 {
 	uint32_t fam_count;
 	vkGetPhysicalDeviceQueueFamilyProperties(this->physical_device, &fam_count, nullptr);
@@ -197,23 +191,23 @@ void VulkanContext::create_device(ApplicationRequirements& requirements)
 	{
 		bool used = false;
 		int q_count = -1;
-		if (requirements.requires(FamilyCapability::Graphics))
+		if (requirements.requires(GSAM::Vulkan::QueueFamilyCapability::Graphics))
 		{
-			if (!this->queue_families_indices[enum_index(FamilyCapability::Graphics)].has_value() && 
+			if (!this->queue_families_indices[enum_index(GSAM::Vulkan::QueueFamilyCapability::Graphics)].has_value() && 
 			fams_props[i].queueFlags & VK_QUEUE_GRAPHICS_BIT)
 			{
-				this->queue_families_indices[enum_index(FamilyCapability::Graphics)] = i;
+				this->queue_families_indices[enum_index(GSAM::Vulkan::QueueFamilyCapability::Graphics)] = i;
 
 				used = true;
-				int count = requirements.queue_requirement(FamilyCapability::Presentation);
+				int count = requirements.queue_requirement(GSAM::Vulkan::QueueFamilyCapability::Presentation);
 				if (count > q_count) q_count = count; 
 
 			}
 		}
 		
-		if (requirements.requires(FamilyCapability::Presentation))
+		if (requirements.requires(GSAM::Vulkan::QueueFamilyCapability::Presentation))
 		{
-			if (!this->queue_families_indices[enum_index(FamilyCapability::Presentation)].has_value())
+			if (!this->queue_families_indices[enum_index(GSAM::Vulkan::QueueFamilyCapability::Presentation)].has_value())
 			{
 				
 				VkBool32 supported = VK_FALSE;
@@ -226,11 +220,11 @@ void VulkanContext::create_device(ApplicationRequirements& requirements)
 			
 				if (supported == VK_TRUE && requestResult == VK_SUCCESS)
 				{
-					this->queue_families_indices[enum_index(FamilyCapability::Presentation)] = i;	
+					this->queue_families_indices[enum_index(GSAM::Vulkan::QueueFamilyCapability::Presentation)] = i;	
 				} 
 
 				used = true;
-				int count = requirements.queue_requirement(FamilyCapability::Presentation);
+				int count = requirements.queue_requirement(GSAM::Vulkan::QueueFamilyCapability::Presentation);
 				if (count > q_count) q_count = count;
 			}
 		}
@@ -249,9 +243,9 @@ void VulkanContext::create_device(ApplicationRequirements& requirements)
 
 	}
 
-	for (int i = 0; i < enum_index(FamilyCapability::Count); i++)
+	for (int i = 0; i < enum_index(GSAM::Vulkan::QueueFamilyCapability::Count); i++)
 	{
-		if (requirements.requires(index_enum<FamilyCapability>(i)) && !this->queue_families_indices[i].has_value()) 
+		if (requirements.requires(GSAM::Vulkan::index_enum<GSAM::Vulkan::QueueFamilyCapability>(i)) && !this->queue_families_indices[i].has_value()) 
 		{
 			GSAM_THROW_ERROR("Available queue families couldn't satisfy application requirements");
 		}
@@ -296,17 +290,17 @@ void VulkanContext::create_device(ApplicationRequirements& requirements)
 	
 }
 
-void VulkanContext::create_frames()
+void VulkanBackend::Context::create_frames()
 {
 	this->frames.reserve(MAX_FRAMES_IN_FLIGHT); // not resizing otherwise everything get fucked up with the indices
 	for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
 	{
-		std::optional<VulkanFrame> frame = this->CreateFrame();
+		std::optional<Frame> frame = this->CreateFrame();
 		this->frames.push_back(*frame);
 	}
 }
 
-void VulkanContext::setup_vma()
+void VulkanBackend::Context::setup_vma()
 {
 	VmaVulkanFunctions vkFunctions{};
 	vkFunctions.vkGetInstanceProcAddr = vkGetInstanceProcAddr;;
@@ -324,174 +318,120 @@ void VulkanContext::setup_vma()
 	GSAM_VK_CHECK(res, "Failed to create VMA Allocator");
 }
 
-VulkanMeshData VulkanContext::LoadMesh_Obj(std::string path)
-{
-	tinyobj::attrib_t attrib;
-	std::vector<tinyobj::shape_t> shapes;
-	std::vector<tinyobj::material_t> materials;
 
-	std::string err;
-
-	std::ifstream stream(path);
-	if (!stream.is_open()) GSAM_THROW_ERROR("Couldn't open " + path);
-
-	if (tinyobj::LoadObj(&attrib, &shapes, &materials, &err, &stream, nullptr, true) != true)
-		GSAM_THROW_ERROR("Couldn't load obj " + path + "\ntinyobj error: " + err);
-
-	stream.close();
-
-	VulkanMeshData data;
-
-	const VkDeviceSize indexCount = shapes[0].mesh.indices.size();
-	for (const auto& index : shapes[0].mesh.indices)
-	{
-		Vertex v{
-			.pos = {
-				attrib.vertices[index.vertex_index * 3], 
-				-attrib.vertices[index.vertex_index * 3 + 1], 
-				attrib.vertices[index.vertex_index * 3 + 2] 
-			}
-		};
-		if (index.normal_index >= 0)
-		{
-			v.normal = {
-				attrib.normals[index.normal_index * 3],
-				-attrib.normals[index.normal_index * 3 + 1],
-				attrib.normals[index.normal_index * 3 + 2]
-			};
-		}
-		if (index.texcoord_index >= 0)
-		{
-			v.uv = {
-				attrib.texcoords[index.texcoord_index * 2],
-				1.0 - attrib.texcoords[index.texcoord_index * 2 + 1]
-			};
-		}
-
-
-    	data.vertices.push_back(v);
-    	data.indices.push_back(data.indices.size());
-	}
-
-	return data;
-}
-
-
-VulkanGpuMesh VulkanContext::UploadMesh(const VulkanMeshData& data)
-{
-	VkDeviceSize vertBufferSize = data.vertices.size() * sizeof(Vertex);
-	VkDeviceSize indexBufferSize = data.indices.size() * sizeof(uint16_t);
-
-
-	VkBufferCreateInfo bufferCreateInfo {
-		.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-		.size = vertBufferSize + indexBufferSize,
-		.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT
-	};
-	VmaAllocationCreateInfo bufferAllocInfo{
-		.flags = 
-		VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | 
-		VMA_ALLOCATION_CREATE_HOST_ACCESS_ALLOW_TRANSFER_INSTEAD_BIT |
-
-		/*
-			VMA_ALLOCATION_CREATE_MAPPED_BIT gets us a persistently mapped buffer, which in turn lets us directly copy data into VRAM
-			with memcpy (How to Vulkan 2026)
-		*/
-		VMA_ALLOCATION_CREATE_MAPPED_BIT,
-		.usage = VMA_MEMORY_USAGE_AUTO
-	};
-	VmaAllocationInfo vBufferAllocInfo{};
-	
-	VkBuffer buffer;
-	VmaAllocation allocation;
-	VmaAllocationInfo allocation_info;
-
-
-	GSAM_VK_CHECK(
-		vmaCreateBuffer(this->vma, &bufferCreateInfo, &bufferAllocInfo, &buffer, &allocation, &allocation_info), 
-		"Couldn't allocate VMA buffer"
-	);
-
-	VulkanGpuMesh gMesh =
-	{
-		.buffer = buffer,
-		.allocation = allocation,
-		.vertex_offset = 0,
-		.index_offset = vertBufferSize,
-		.index_count = static_cast<uint32_t>(data.indices.size())
-	};
-
-	return gMesh;
-}
 
 /*
 	Temporary function, this wont be an option in GSAM, which
 	needs to create a lower level API based on buffers etc.
 */
-ResourceHandle VulkanContext::CreateMesh(std::string path)
+GSAM::GSMesh VulkanBackend::Context::CreateMesh(const std::filesystem::path& path)
 {
 	try
 	{
 		std::string ext = std::filesystem::path(path).extension().string();
 
-		std::optional<VulkanMeshData> cpuData = std::nullopt;
-		std::optional<VulkanGpuMesh> gpuMesh = std::nullopt;
+		std::optional<MeshData> cpuData = std::nullopt;
 
 		bool supported = false;
 		if (ext == ".obj")
 		{
 			supported = true;
-			cpuData = this->LoadMesh_Obj(path);
-		} else GSAM_LOG_DEBUG(ext + " is different than .obj");
+			cpuData = LoadMesh_Obj(path);
+		} else GSAM_LOG_ERROR(ext + " isn't a supported format for meshes");
 
-		if (cpuData.has_value())
+		
+		if (!cpuData.has_value())
 		{
-			gpuMesh = UploadMesh(cpuData.value());
-		} else {
-			if (supported)
-			{
-				GSAM_THROW_ERROR("Couldn't load " + path);
-			} else
-			{
-				GSAM_THROW_ERROR(ext + "isn't a supported mesh format");
-			}
+			if (supported) GSAM_THROW_ERROR("Couldn't load " + path.string());
+				else GSAM_THROW_ERROR(ext + "isn't a supported mesh format");
 		}
 
-		if (gpuMesh.has_value())
-		{
-			try 
-			{
-				ResourceHandle handle = this->meshRegistry.Allocate();
-				this->meshRegistry.Set(handle, *gpuMesh);
+		VkDeviceSize vertBufferSize = cpuData.value().vertices.size() * sizeof(GSAM::Vertex);
+		VkDeviceSize indexBufferSize = cpuData.value().indices.size() * sizeof(uint16_t);
 
-				this->meshHandles.push_back(handle);
-				return handle;
-			} catch (const std::runtime_error& err)
+		VkBufferCreateInfo bufferCreateInfo {
+			.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+			.size = vertBufferSize + indexBufferSize,
+			.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT
+		};
+		VmaAllocationCreateInfo bufferAllocInfo{
+			.flags = 
+			VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | 
+			VMA_ALLOCATION_CREATE_HOST_ACCESS_ALLOW_TRANSFER_INSTEAD_BIT |
+
+			/*
+				VMA_ALLOCATION_CREATE_MAPPED_BIT gets us a persistently mapped buffer, which in turn lets us directly copy data into VRAM
+				with memcpy (How to Vulkan 2026)
+			*/
+			VMA_ALLOCATION_CREATE_MAPPED_BIT,
+			.usage = VMA_MEMORY_USAGE_AUTO
+		};
+		
+		VkBuffer buffer{};
+		VmaAllocation allocation{};
+		VmaAllocationInfo allocation_info{};
+
+		VkResult res = vmaCreateBuffer(				
+			this->vma, 
+			&bufferCreateInfo, 
+			&bufferAllocInfo, 
+			&buffer, 
+			&allocation, 
+			&allocation_info
+		);
+
+		GSAM_VK_CHECK(res, "Couldn't allocate shader buffer for " + path.string());
+		vmaSetAllocationName(this->vma, allocation, "Mesh Shader Buffer");
+
+		GpuMesh gpuMesh =
+		{
+			.buffer = buffer,
+			.allocation = allocation,
+			.vertex_offset = 0,
+			.index_offset = vertBufferSize,
+			.index_count = static_cast<uint32_t>(cpuData.value().indices.size())
+		};
+
+		try 
+		{
+			TypedResourceHandle<GpuMesh> handle = this->meshRegistry.Allocate();
+			this->meshRegistry.Set(handle, gpuMesh);
+			this->meshHandles.push_back(handle);
+
+			VulkanMeshImplementation m_impl 
 			{
-				GSAM_LOG_ERROR(err.what());
-				gpuMesh->Free(this->vma);
-			}
+				.handle = handle
+			};
 			
-		} else GSAM_THROW_ERROR("Couldn't upload GPU mesh " + path);
+			return (GSAM::GSMesh){
+				.resource_path = path.string(),
+				.impl = std::make_unique<GSAM::MeshImplementation>(m_impl),
+			};
+		} catch (const std::runtime_error& err)
+		{
+			GSAM_LOG_ERROR(err.what());
+			gpuMesh.Free(this->vma);
+		}
+		GSAM_LOG_DEBUG("Successfully uploaded " + path.string());
 
 	} catch (const std::runtime_error& err)
 	{
-		std::cout << err.what() << "\n";
+		GSAM_LOG_ERROR(err.what());
 	}
 
-	return ResourceHandle();
+	return (GSAM::GSMesh){ .resource_path = "", .impl = nullptr };
 }
 
-std::optional<VulkanFrame> VulkanContext::CreateFrame()
+std::optional<VulkanBackend::Frame> VulkanBackend::Context::CreateFrame()
 {
 	try
 	{
 		uint32_t size = static_cast<uint32_t>(this->frames.size());
 
-		VulkanFrame frame{
+		Frame frame{
 			.index = size,
-			.commandBuffer = this->commandManager->create_command_buffer(this->device, FamilyCapability::Graphics),
-			.shaderBuffer = ShaderDataBuffer(this->vma, this->device),
+			.commandBuffer = this->commandManager->create_command_buffer(this->device, GSAM::Vulkan::QueueFamilyCapability::Graphics),
+			.shaderBuffer = ShaderBuffer(this->vma, this->device),
 			
 			.fence = this->syncManager->get_frame_fence(size),
 			.semaphore = this->syncManager->get_frame_semaphore(size)

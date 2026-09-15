@@ -1,13 +1,11 @@
 #pragma once
 
+#include "Log.hpp"
+
+#include <optional>
 #include <cstdint>
 #include <vector>
-#include <memory>
-#include <iostream>
-#include <cstring>
-#include <optional>
 
-#include "Log.hpp"
 
 template <typename T>
 struct TypedResourceHandle
@@ -22,7 +20,7 @@ struct TypedResourceSlot
 	uint64_t generation = 1;
 	bool isAlive = true;
 
-	std::optional<T> data = std::nullopt;
+	T data;
 };
 
 template <typename T>
@@ -38,12 +36,12 @@ private:
         }
         if (handle.id >= this->resource_pool.size()) 
         {
-            GSAM_LOG_ERROR("Passed handle is invalid (handle.id >= resource_pool.size())");
+            GSAM_LOG_ERROR("Passed handle is invalid (id = " + std::to_string(handle.id) + " -> handle.id >= resource_pool.size())");
             return false;
         }
         if (handle.generation != this->resource_pool[handle.id].generation) 
         {
-            GSAM_LOG_ERROR("Passed handle is invalid (handle.generation != resource_pool[handle.id].generation)");
+            GSAM_LOG_ERROR("Passed handle is invalid (generation = " + std::to_string(handle.generation) + " -> handle.generation != resource_pool[handle.id].generation)");
             return false;
         }
         if (this->resource_pool[handle.id].isAlive == false)
@@ -62,7 +60,6 @@ public:
 	TypedResourceRegistry()
     {
         TypedResourceSlot<T> nullslot;
-        nullslot.data = std::nullopt;
         nullslot.generation = 0;
         nullslot.isAlive = false;
         this->resource_pool.push_back(nullslot);
@@ -99,21 +96,20 @@ public:
         
         slot.generation++;
         slot.isAlive = false;
-        slot.data.reset();
 
         this->free_pool.push_back(handle.id);
     }
 
-	std::optional<T>* Get(const TypedResourceHandle<T>& handle)
+	T* Get(const TypedResourceHandle<T>& handle)
 	{
         if (!this->is_handle_valid(handle)) return nullptr;
-
+        
         return &this->resource_pool[handle.id].data;
 	}
 
 	void Set(const TypedResourceHandle<T>& handle, const T& data)
 	{
-		std::optional<T>* p_slot_data = this->Get(handle);
+		T* p_slot_data = this->Get(handle);
         if (p_slot_data != nullptr)
         {
             *p_slot_data = data;

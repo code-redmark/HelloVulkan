@@ -2,7 +2,7 @@
     Contains all functions related to the creation and the usage of validation layers
 */
 
-#include "VulkanContext.h"
+#include "Context.h"
 
 #ifndef NDEBUG
 
@@ -39,7 +39,7 @@ static VKAPI_ATTR VkBool32 VKAPI_CALL vulkanDebugCallback(
     return VK_FALSE; 
 }
 
-bool VulkanContext::check_validation_layers_support()
+bool VulkanBackend::Context::check_validation_layers_support()
 {
     uint32_t layerCount = 0;
     vkEnumerateInstanceLayerProperties(&layerCount, nullptr);
@@ -59,11 +59,11 @@ bool VulkanContext::check_validation_layers_support()
 		}
     }
 
-	std::cout << "[VulkanContext::check_validation_layers_support] INFO: couldn't find VK_LAYER_KHRONOS_validation\n";	
+	GSAM_LOG_INFO("couldn't find VK_LAYER_KHRONOS_validation");	
     return false;
 }
 
-bool VulkanContext::create_debug_messenger() {
+void VulkanBackend::Context::create_debug_messenger() {
 
     VkDebugUtilsMessengerCreateInfoEXT debugCreateInfo{};
     debugCreateInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
@@ -94,9 +94,10 @@ bool VulkanContext::create_debug_messenger() {
             &this->debugMessenger
         );
 
-        if (result != VK_SUCCESS) return false;
-            else return true;        
-    } else return false;
+        GSAM_VK_CHECK(result, "Debug messenger creation failed");
+            
+            
+    } else GSAM_LOG_ERROR("Couldn't get debug messenger creation procedure");
 }
 
 #endif
