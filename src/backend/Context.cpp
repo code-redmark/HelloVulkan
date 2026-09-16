@@ -318,11 +318,34 @@ void VulkanBackend::Context::setup_vma()
 	GSAM_VK_CHECK(res, "Failed to create VMA Allocator");
 }
 
+TypedResourceHandle<VulkanBackend::GpuImage> VulkanBackend::Context::CreateImage(
+	const VkImageCreateInfo image_create_info, 
+	const VmaAllocationCreateInfo& allocation_create_info,
+	VkImageViewCreateInfo& image_view_create_info
+)
+{
+	GpuImage image = GpuImage(this->vma, image_create_info, allocation_create_info, this->device, image_view_create_info);
+	auto handle = this->imageRegistry.Allocate();
+	this->imageRegistry.Set(handle, image);
+
+	this->imageHandles.push_back(handle);
+	return handle;
+}
+TypedResourceHandle<VulkanBackend::GpuBuffer> VulkanBackend::Context::CreateBuffer(
+	const VkBufferCreateInfo& buffer_create_info,
+	const VmaAllocationCreateInfo& allocation_create_info
+)
+{
+	GpuBuffer buffer(this->vma, buffer_create_info, allocation_create_info);
+	auto handle = this->bufferRegistry.Allocate();
+	this->bufferRegistry.Set(handle, buffer);
+	return handle;
+}
 
 
 /*
-	Temporary function, this wont be an option in GSAM, which
-	needs to create a lower level API based on buffers etc.
+	Temporary function, this wont be an option in GSAM which is going
+	to be way lower level
 */
 GSAM::GSMesh VulkanBackend::Context::CreateMesh(const std::filesystem::path& path)
 {
@@ -337,24 +360,17 @@ GSAM::GSMesh VulkanBackend::Context::CreateMesh(const std::filesystem::path& pat
 		{
 			supported = true;
 			cpuData = LoadMesh_Obj(path);
-		} else GSAM_LOG_ERROR(ext + " isn't a supported format for meshes");
-
-		
-		if (!cpuData.has_value())
-		{
-			if (supported) GSAM_THROW_ERROR("Couldn't load " + path.string());
-				else GSAM_THROW_ERROR(ext + "isn't a supported mesh format");
-		}
+		} else GSAM_THROW_ERROR(ext + " isn't a supported format for meshes");
 
 		VkDeviceSize vertBufferSize = cpuData.value().vertices.size() * sizeof(GSAM::Vertex);
 		VkDeviceSize indexBufferSize = cpuData.value().indices.size() * sizeof(uint16_t);
 
-		VkBufferCreateInfo bufferCreateInfo {
+		const VkBufferCreateInfo bufferCreateInfo {
 			.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
 			.size = vertBufferSize + indexBufferSize,
 			.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT
 		};
-		VmaAllocationCreateInfo bufferAllocInfo{
+		const VmaAllocationCreateInfo bufferAllocInfo{
 			.flags = 
 			VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | 
 			VMA_ALLOCATION_CREATE_HOST_ACCESS_ALLOW_TRANSFER_INSTEAD_BIT |
@@ -366,52 +382,29 @@ GSAM::GSMesh VulkanBackend::Context::CreateMesh(const std::filesystem::path& pat
 			VMA_ALLOCATION_CREATE_MAPPED_BIT,
 			.usage = VMA_MEMORY_USAGE_AUTO
 		};
+
+		TypedResourceHandle<GpuBuffer> bufferHandle;
 		
-		VkBuffer buffer{};
-		VmaAllocation allocation{};
-		VmaAllocationInfo allocation_info{};
+		bufferHandle = this->CreateBuffer(bufferCreateInfo, bufferAllocInfo);
+		GpuBuffer* buff = this->bufferRegistry.Get(bufferHandle);
+		if (!buff) GSAM_THROW_ERROR("Buffer wasn't created correctly");
+		vmaSetAllocationName(this->vma, buff->allocation, "Mesh Shader GpuBuffer");
 
-		VkResult res = vmaCreateBuffer(				
-			this->vma, 
-			&bufferCreateInfo, 
-			&bufferAllocInfo, 
-			&buffer, 
-			&allocation, 
-			&allocation_info
-		);
+		GpuMesh mesh(*buff);
+		TypedResourceHandle<GpuMesh> meshHandle = this->meshRegistry.Allocate();
+		this->meshRegistry.Set(meshHandle, mesh);
+		this->meshHandles.push_back(meshHandle);
 
-		GSAM_VK_CHECK(res, "Couldn't allocate shader buffer for " + path.string());
-		vmaSetAllocationName(this->vma, allocation, "Mesh Shader Buffer");
-
-		GpuMesh gpuMesh =
+		VulkanMeshImplementation m_impl 
 		{
-			.buffer = buffer,
-			.allocation = allocation,
-			.vertex_offset = 0,
-			.index_offset = vertBufferSize,
-			.index_count = static_cast<uint32_t>(cpuData.value().indices.size())
+			.handle = meshHandle
 		};
-
-		try 
-		{
-			TypedResourceHandle<GpuMesh> handle = this->meshRegistry.Allocate();
-			this->meshRegistry.Set(handle, gpuMesh);
-			this->meshHandles.push_back(handle);
-
-			VulkanMeshImplementation m_impl 
-			{
-				.handle = handle
-			};
-			
-			return (GSAM::GSMesh){
-				.resource_path = path.string(),
-				.impl = std::make_unique<GSAM::MeshImplementation>(m_impl),
-			};
-		} catch (const std::runtime_error& err)
-		{
-			GSAM_LOG_ERROR(err.what());
-			gpuMesh.Free(this->vma);
-		}
+		
+		return (GSAM::GSMesh){
+			.resource_path = path.string(),
+			.impl = std::make_unique<GSAM::MeshImplementation>(m_impl),
+		};
+		
 		GSAM_LOG_DEBUG("Successfully uploaded " + path.string());
 
 	} catch (const std::runtime_error& err)
@@ -445,4 +438,97 @@ std::optional<VulkanBackend::Frame> VulkanBackend::Context::CreateFrame()
 	return std::nullopt;
 }
 
+GSAM::GSTexture VulkanBackend::Context::CreateTexture(const ImageData& data)
+{
+	ktxTextureCreateInfo createInfo{};
+
+    createInfo.vkFormat = VK_FORMAT_R8G8B8A8_UNORM;
+    createInfo.baseWidth = data.width;
+    createInfo.baseHeight = data.height;
+    createInfo.baseDepth = 1;
+    createInfo.numDimensions = 2;
+    createInfo.numLevels = 1;
+    createInfo.numLayers = 1;
+    createInfo.numFaces = 1;
+    createInfo.isArray = KTX_FALSE;
+    createInfo.generateMipmaps = KTX_FALSE;
+
+    ktxTexture2* texture2 = nullptr;
+
+    KTX_error_code result = ktxTexture2_Create(
+        &createInfo,
+        KTX_TEXTURE_CREATE_ALLOC_STORAGE,
+        &texture2
+    );
+
+	ktxTexture* texture = (ktxTexture*)(texture2);
+
+    if (result != KTX_SUCCESS)
+	{
+		GSAM_LOG_ERROR("Failed to create texture (failed ktxTexture2 creation)");
+        return GSAM::GSTexture();
+	}
+
+    const ktx_size_t imageSize =
+        static_cast<ktx_size_t>(data.width) *
+        static_cast<ktx_size_t>(data.height) *
+        static_cast<ktx_size_t>(data.channels);
+
+    result = ktxTexture_SetImageFromMemory(
+        texture,
+        0,                  
+        0,                  
+        0,                  
+        data.pixels,
+        imageSize
+    );
+
+    if (result != KTX_SUCCESS)
+    {
+        ktxTexture2_Destroy(texture2);
+        return GSAM::GSTexture();
+    }
+
+	VkImageCreateInfo image_create_info{
+    	.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+    	.imageType = VK_IMAGE_TYPE_2D,
+    	.format = ktxTexture_GetVkFormat(texture),
+    	.extent = {.width = texture->baseWidth, .height = texture->baseHeight, .depth = 1 },
+    	.mipLevels = texture->numLevels,
+    	.arrayLayers = 1,
+    	.samples = VK_SAMPLE_COUNT_1_BIT,
+    	.tiling = VK_IMAGE_TILING_OPTIMAL,
+    	.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, // disk to image
+    	.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED
+	};
+	VmaAllocationCreateInfo image_allocation_create_info{ .usage = VMA_MEMORY_USAGE_AUTO };
+
+	VkImageViewCreateInfo image_view_create_info{
+		.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+		.viewType = VK_IMAGE_VIEW_TYPE_2D,
+		.format = ktxTexture_GetVkFormat(texture),
+		.subresourceRange = {.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .levelCount = texture->numLevels, .layerCount = 1 }
+	};
+
+	try 
+	{
+		TypedResourceHandle<GpuImage> handle = this->CreateImage(image_create_info, image_allocation_create_info, image_view_create_info);
+		VulkanTextureImplementation impl {
+			.handle = handle,
+			.ktx = texture
+		};
+
+		GSAM::GSTexture out = {
+			.impl = std::make_unique<GSAM::TextureImplementation>(impl)
+		};
+
+		return out;
+	} catch (const std::runtime_error& err)
+	{
+		GSAM_LOG_ERROR("Failed to create texture (Failed to create texture image: " + std::string(err.what()) + ")");
+		return GSAM::GSTexture();
+	}	
+
+
+}
 

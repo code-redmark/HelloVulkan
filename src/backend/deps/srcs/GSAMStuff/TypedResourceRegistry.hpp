@@ -29,22 +29,24 @@ class TypedResourceRegistry
 private:
     bool is_handle_valid(const TypedResourceHandle<T>& handle)
     {
+
+        
         if (handle.id == 0) 
         {
             GSAM_LOG_ERROR("Passed handle is invalid (nullslot ID)");
             return false;
         }
-        if (handle.id >= this->resource_pool.size()) 
+        if (handle.id > this->resource_pool.size()) 
         {
             GSAM_LOG_ERROR("Passed handle is invalid (id = " + std::to_string(handle.id) + " -> handle.id >= resource_pool.size())");
             return false;
         }
-        if (handle.generation != this->resource_pool[handle.id].generation) 
+        if (handle.generation != this->resource_pool[handle.id - 1].generation) 
         {
             GSAM_LOG_ERROR("Passed handle is invalid (generation = " + std::to_string(handle.generation) + " -> handle.generation != resource_pool[handle.id].generation)");
             return false;
         }
-        if (this->resource_pool[handle.id].isAlive == false)
+        if (this->resource_pool[handle.id - 1].isAlive == false)
         {
             GSAM_LOG_ERROR("Passed handle is invalid (resource_pool[handle.id].isAlive is false)");
             return false;
@@ -57,13 +59,11 @@ private:
 	std::vector<uint32_t> free_pool;
 
 public:
+
+    static inline constexpr TypedResourceHandle<T> nullhandle { .id = 0, .generation = 0 }; 
+
 	TypedResourceRegistry()
     {
-        TypedResourceSlot<T> nullslot;
-        nullslot.generation = 0;
-        nullslot.isAlive = false;
-        this->resource_pool.push_back(nullslot);
-
         this->free_pool = {};
     }
 
@@ -73,16 +73,19 @@ public:
         if (this->free_pool.size() == 0)
         {
             this->resource_pool.emplace_back();
-            handle.id = this->resource_pool.size() - 1;
+            handle.id = this->resource_pool.size();
             handle.generation = 1;
         }
         else 
         {
-            this->resource_pool[this->free_pool.back()].isAlive = true;
-            handle.generation = this->resource_pool[this->free_pool.back()].generation;
             handle.id = this->free_pool.back();
-
             this->free_pool.pop_back();
+
+            auto& slot = this->resource_pool[handle.id - 1];
+
+            slot.isAlive = true;
+            slot.generation = this->resource_pool[this->free_pool.back()].generation;
+            
         }
 
         return handle;
@@ -92,7 +95,7 @@ public:
     {
         if (!this->is_handle_valid(handle)) return;
 
-        TypedResourceSlot<T>& slot = this->resource_pool[handle.id];
+        TypedResourceSlot<T>& slot = this->resource_pool[handle.id - 1];
         
         slot.generation++;
         slot.isAlive = false;
@@ -104,7 +107,7 @@ public:
 	{
         if (!this->is_handle_valid(handle)) return nullptr;
         
-        return &this->resource_pool[handle.id].data;
+        return &this->resource_pool[handle.id - 1].data;
 	}
 
 	void Set(const TypedResourceHandle<T>& handle, const T& data)

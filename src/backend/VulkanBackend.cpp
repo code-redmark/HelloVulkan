@@ -1,28 +1,8 @@
 #include "VulkanBackend.h"
 
-void VulkanBackend::Buffer::Free(VmaAllocator allocator)
-{
-	vmaDestroyBuffer(allocator, this->buffer, this->allocation);
-}
 
-VulkanBackend::ShaderBuffer::ShaderBuffer(VmaAllocator allocator, const VkDevice& device)
-{
-	VmaAllocationCreateInfo allocInfo{};
-	allocInfo.usage = VMA_MEMORY_USAGE_CPU_TO_GPU;
 
-	VkBufferCreateInfo bufferCreateInfo{};
-	bufferCreateInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-	bufferCreateInfo.size = sizeof(ShaderData);
-	bufferCreateInfo.usage = VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
 
-	VkResult res = vmaCreateBuffer(allocator, &bufferCreateInfo, &allocInfo, &this->buffer, &this->allocation, &this->allocationInfo);
-	vmaSetAllocationName(allocator, this->allocation, "ShaderBuffer");
-
-	VkBufferDeviceAddressInfo deviceAddressInfo{};
-	deviceAddressInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
-	deviceAddressInfo.buffer = this->buffer;
-	this->deviceAddress = vkGetBufferDeviceAddress(device, &deviceAddressInfo);
-}
 
 bool GSAM::Vulkan::ApplicationRequirements::requires(GSAM::Vulkan::QueueFamilyCapability capability) const
 {
@@ -40,9 +20,9 @@ int GSAM::Vulkan::ApplicationRequirements::queue_requirement(GSAM::Vulkan::Queue
 	return requirements[static_cast<int>(capability)].second; 
 }
 
-void VulkanBackend::GpuMesh::Free(VmaAllocator vma)
+void VulkanBackend::GpuMesh::Free(const VmaAllocator& vma)
 {
-	vmaDestroyBuffer(vma, this->buffer, this->allocation);
+	this->buffer.Free(vma);
 }
 
 void VulkanBackend::Frame::Free(VmaAllocator vma)
@@ -54,10 +34,7 @@ VulkanBackend::ImageData VulkanBackend::load_image(const std::filesystem::path& 
 {
 	int width, height, channels;
 	stbi_uc* pixels = stbi_load(path.string().c_str(), &width, &height, &channels, STBI_rgb_alpha);
-	if (!pixels)
-	{
-		GSAM_LOG_ERROR("Failed to load image: " + path.string());
-	}
+	if (!pixels) GSAM_LOG_ERROR("Failed to load image: " + path.string());
 
 	ImageData imageData{};
 	imageData.width = width;
@@ -66,6 +43,22 @@ VulkanBackend::ImageData VulkanBackend::load_image(const std::filesystem::path& 
 	imageData.pixels = pixels;
 
 	return imageData;
+}
+
+VulkanBackend::GpuImage::GpuImage(
+	const VmaAllocator& vma, 
+	const VkImageCreateInfo& image_create_info, 
+	const VmaAllocationCreateInfo& allocation_create_info,
+	const VkDevice& device,
+	VkImageViewCreateInfo& image_view_create_info
+)
+{
+	VkResult res = vmaCreateImage(vma, &image_create_info, &allocation_create_info, &this->image, &this->allocation, nullptr);
+	GSAM_VK_CHECK(res, "Failed to create GpuImage (Failed to create VkImage)");
+
+	image_view_create_info.image = this->image;
+	VkResult view_res = vkCreateImageView(device, &image_view_create_info, nullptr, &this->imageView);
+
 }
 
 VulkanBackend::MeshData VulkanBackend::LoadMesh_Obj(const std::filesystem::path& path)

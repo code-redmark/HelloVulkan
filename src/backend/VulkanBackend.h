@@ -6,8 +6,10 @@
 */
 #define VK_USE_PLATFORM_WIN32_KHR
 #include <vulkan/vulkan.h>
-#include "deps/vma.h"
 
+#include "GpuResources.hpp"
+
+#include "deps/vma.h"
 #include "deps/srcs/GSAMStuff/GSAM.hpp"
 
 #include "deps/srcs/stb_image/stb_image.h"
@@ -27,7 +29,7 @@
 #include <filesystem>
 #include <string>
 
-#define GSAM_VK_CHECK(result, err_msg) if (result != VK_SUCCESS) GSAM_THROW_ERROR(err_msg);
+
 
 namespace VulkanBackend
 {
@@ -37,16 +39,10 @@ namespace VulkanBackend
     class SyncManager;
     class Cleaner;
 
-    struct Buffer
-    {
-        VkBuffer buffer{};
-        VmaAllocation allocation{};
-        VmaAllocationInfo allocationInfo{};
-
-        Buffer() = default;
-
-        void Free(VmaAllocator allocator);
-    };
+    class GpuBuffer;
+    class ShaderBuffer;
+    class GpuMesh;
+    class GpuImage;
 
     class TextureImplementation : public GSAM::TextureImplementation
     {
@@ -59,38 +55,17 @@ namespace VulkanBackend
         std::vector<uint16_t> indices;
     };
 
-    
-    struct GpuMesh
-    {
-        VkBuffer buffer = VK_NULL_HANDLE;
-        VmaAllocation allocation{};
-        
-        VkDeviceSize vertex_offset{};
-        VkDeviceSize index_offset{};
-        
-        uint32_t index_count{};
-        
-        void Free(VmaAllocator vma);
-    };
-    
     struct VulkanMeshImplementation : public GSAM::MeshImplementation
     {
         TypedResourceHandle<GpuMesh> handle;
     };
     
     struct ShaderData {
-        glm::mat4 projection;
-        glm::mat4 view;
+        glm::mat4 projection{};
+        glm::mat4 view{};
         glm::mat4 model[3];
         glm::vec4 lightPos{ 0.0f, -10.0f, 10.0f, 0.0f };
         uint32_t selected{1};
-    };
-
-    struct ShaderBuffer : public Buffer
-    {
-        VkDeviceAddress deviceAddress = 0;
-
-        ShaderBuffer(VmaAllocator allocator, const VkDevice& device);
     };
 
     struct Frame
@@ -119,17 +94,13 @@ namespace VulkanBackend
     };
 
     ImageData load_image(const std::filesystem::path& path);
-    struct GpuImage
+
+    struct VulkanTextureImplementation : public GSAM::TextureImplementation
     {
-        VkImage image{};
-        VmaAllocation allocation{};
-        VkImageView imageView{};
+        TypedResourceHandle<GpuImage> handle;
+        ktxTexture* ktx;
     };
-    struct ImageTexture
-    {
-        GpuImage gpuImage;
-        TextureImplementation texture;
-    };
+
 }
 
 

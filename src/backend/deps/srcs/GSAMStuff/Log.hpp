@@ -23,3 +23,7 @@
 #else
     #define GSAM_FUNC_NAME __func__ // Fallback
 #endif
+
+#ifdef VK_VERSION_1_0
+#define GSAM_VK_CHECK(result, err_msg) if (result != VK_SUCCESS) GSAM_THROW_ERROR(err_msg);
+#endif

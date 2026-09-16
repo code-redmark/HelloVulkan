@@ -195,43 +195,28 @@ VkFormat VulkanBackend::Swapchain::get_depth_format(VkPhysicalDevice physical_de
 
 void VulkanBackend::Swapchain::create_depth_attachment(VulkanBackend::Context& context)
 {
-    VkImageCreateInfo imageInfo{};
-    imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-    imageInfo.imageType = VK_IMAGE_TYPE_2D;
-    imageInfo.format = this->depth_image_format;
-    // this window size shit is tormenting me
-    //depthImageCI.extent = {.width = static_cast<uint32_t>(windowSize.x), .height = static_cast<uint32_t>(windowSize.y), .depth = 1 };
-    imageInfo.extent = {.width = 800, .height = 600, .depth = 1 };
-    imageInfo.mipLevels = 1;
-    imageInfo.arrayLayers = 1;
-    imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
-    imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
-    imageInfo.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
-    imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-
-    VmaAllocationCreateInfo allocInfo {
-    .flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT,
-    .usage = VMA_MEMORY_USAGE_AUTO
+    VkImageCreateInfo imageInfo{
+        .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+        .imageType = VK_IMAGE_TYPE_2D,
+        .format = this->depth_image_format,
+        // this window size shit is tormenting me
+        //depthImageCI.extent = {.width = static_cast<uint32_t>(windowSize.x), .height = static_cast<uint32_t>(windowSize.y), .depth = 1 };
+        .extent = {.width = 800, .height = 600, .depth = 1 },
+        .mipLevels = 1,
+        .arrayLayers = 1,
+        .samples = VK_SAMPLE_COUNT_1_BIT,
+        .tiling = VK_IMAGE_TILING_OPTIMAL,
+        .usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+        .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED
     };
 
-
-    GpuImage out;
-    VkResult res = vmaCreateImage(
-        context.vma, 
-        &imageInfo, 
-        &allocInfo, 
-        &out.image, 
-        &out.allocation, 
-        nullptr
-    );
-    GSAM_VK_CHECK(res, "Failed to create depth image");
-    GSAM_LOG_DEBUG("Depth image created");
-
-    vmaSetAllocationName(context.vma, out.allocation, "Depth attachment image");
+    VmaAllocationCreateInfo allocInfo {
+        .flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT,
+        .usage = VMA_MEMORY_USAGE_AUTO
+    };
 
     VkImageViewCreateInfo viewInfo{};
     viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-    viewInfo.image = out.image;
     viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
     viewInfo.format = this->depth_image_format;
 
@@ -243,15 +228,11 @@ void VulkanBackend::Swapchain::create_depth_attachment(VulkanBackend::Context& c
 
     viewInfo.subresourceRange = subresourceRange;
 
-    VkResult viewRes = vkCreateImageView(context.device, &viewInfo, nullptr, &out.imageView);
-    GSAM_VK_CHECK(viewRes, "Failed to create depth image view");
-
+    TypedResourceHandle<GpuImage> handle = context.CreateImage(imageInfo, allocInfo, viewInfo);
+    auto img = context.imageRegistry.Get(handle);
     
-    TypedResourceHandle<GpuImage> handle = context.imageRegistry.Allocate();
-    context.imageRegistry.Set(handle, out);
-    context.imageHandles.push_back(handle);
-
-    GSAM_LOG_DEBUG("Depth image view created");
+    vmaSetAllocationName(context.vma, img->allocation, "Depth attachment image");
+    GSAM_LOG_DEBUG("Depth attachment created!");
 }
 
 void VulkanBackend::Swapchain::Free(const VmaAllocator& vma, const VkDevice& device)

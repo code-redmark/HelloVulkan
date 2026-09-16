@@ -85,14 +85,25 @@ private:
     */
     void create_frames();
 
-    TypedResourceRegistry<GpuMesh> meshRegistry;
-    std::vector<TypedResourceHandle<GpuMesh>> meshHandles;
+    TypedResourceRegistry<GpuBuffer> bufferRegistry;
+    std::vector<TypedResourceHandle<GpuBuffer>> bufferHandles;
+
+    TypedResourceHandle<GpuBuffer> CreateBuffer(
+        const VkBufferCreateInfo& buffer_create_info,
+        const VmaAllocationCreateInfo& allocation_create_info
+    );
 
     TypedResourceRegistry<GpuImage> imageRegistry;
     std::vector<TypedResourceHandle<GpuImage>> imageHandles;
     
-    ImageTexture CreateImageTexture(const std::filesystem::path& path);
+    TypedResourceHandle<GpuImage> CreateImage(
+        const VkImageCreateInfo image_create_info, 
+        const VmaAllocationCreateInfo& allocation_create_info,
+        VkImageViewCreateInfo& image_view_create_info
+    );
 
+    TypedResourceRegistry<GpuMesh> meshRegistry;
+    std::vector<TypedResourceHandle<GpuMesh>> meshHandles;
 
     std::unique_ptr<CommandManager> commandManager;
     std::unique_ptr<SyncManager> syncManager;
@@ -100,21 +111,6 @@ private:
     std::vector<Frame> frames;
     std::optional<Frame> CreateFrame();
 
-
-    /*
-        need to probably get rid of this and put it inside of the CreateMesh function
-
-    */  
-    // GpuMesh UploadMesh(const MeshData& data);
-
-    /*
-        Same thing as UploadMesh, but for images, the RHI only needs to
-        handle and hide stuff like vmaCreateImage, vkCreateImageView, etc. from the user, so this function will
-        get the ktx processed image instead of the pixels from stbi_load, and then it will create the VkImage, VkImageView, VkSampler, etc. 
-        and return a ktxTexture pointer to the user
-    */
-    // GpuImage UploadImage(const VulkanBackend::ImageData& data); 
-    
     std::unique_ptr<Cleaner> cleaner;
 
 public:
@@ -127,7 +123,7 @@ public:
     */
 
     GSAM::GSMesh CreateMesh(const std::filesystem::path& path);
-    TypedResourceHandle<GSAM::GSTexture> CreateTexture(const std::filesystem::path& path);
+    GSAM::GSTexture CreateTexture(const ImageData& data);
 };
 
 

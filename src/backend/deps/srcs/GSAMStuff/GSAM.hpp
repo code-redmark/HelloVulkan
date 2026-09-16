@@ -59,7 +59,6 @@ namespace GSAM
 
     struct GSTexture
     {
-        glm::vec2 size;
         std::unique_ptr<TextureImplementation> impl;
     };
 
