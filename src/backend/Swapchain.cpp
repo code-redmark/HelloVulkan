@@ -14,6 +14,7 @@ VulkanBackend::Swapchain::Swapchain(Context& context)
     set_queue_families(context.queue_families_indices);
     set_surface_capability_info(context.physical_device, context.surface);
     set_image_format();
+    select_present_mode(context.physical_device, context.surface);
 
     createSwapchainKHR(context.device);
     
@@ -108,15 +109,7 @@ void VulkanBackend::Swapchain::select_present_mode(VkPhysicalDevice physical_dev
             break;
         }
     }
-}
-
-void VulkanBackend::Swapchain::get_surface_images(const VkDevice& device)
-{
-    uint32_t imgCount = 0;
-    vkGetSwapchainImagesKHR(device, this->swapchain, &imgCount, nullptr);
-    this->surface_images.resize(imgCount);
-    vkGetSwapchainImagesKHR(device, this->swapchain, &imgCount, this->surface_images.data());
-
+    this->info.presentMode = presentMode;
 }
 
 void VulkanBackend::Swapchain::createSwapchainKHR(const VkDevice& device)

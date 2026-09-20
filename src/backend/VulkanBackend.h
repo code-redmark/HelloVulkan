@@ -1,10 +1,7 @@
 #pragma once
 
-/*
-	needed to get the VK_KHR_win32_Surface extension, in GSAM we're going to 
-	select the right one based on the user's OS, im on Windows so WIN32
-*/
-#define VK_USE_PLATFORM_WIN32_KHR
+#define VK_USE_PLATFORM_XLIB_KHR
+#include <wayland-client.h>
 #include <vulkan/vulkan.h>
 
 #include "GpuResources.hpp"
@@ -28,8 +25,6 @@
 #include <fstream>
 #include <filesystem>
 #include <string>
-
-
 
 namespace VulkanBackend
 {

@@ -5,48 +5,188 @@
 #include "SyncManager.h"
 #include "Cleaner.h"
 
-VulkanBackend::Context::Context(void* window_handle, GSAM::Vulkan::ApplicationRequirements &requirements)
-	: instance(VK_NULL_HANDLE), 
-	physical_device(VK_NULL_HANDLE), 
-	surface(VK_NULL_HANDLE), 
-	device(VK_NULL_HANDLE), 
-	queue_families_indices({std::nullopt}), 
-	swapchain(nullptr),
-	commandManager(nullptr),
-	syncManager(nullptr),
-	cleaner(std::make_unique<Cleaner>(*this))
-{
-	try  
+#ifdef _WIN32
+	// Windows constructor
+	VulkanBackend::Context::Context(HWND win_handle, GSAM::Vulkan::ApplicationRequirements& requirements)
+		: 	instance(VK_NULL_HANDLE), 
+			physical_device(VK_NULL_HANDLE), 
+			surface(VK_NULL_HANDLE), 
+			device(VK_NULL_HANDLE), 
+			queue_families_indices({std::nullopt}), 
+			swapchain(nullptr),
+			commandManager(nullptr),
+			syncManager(nullptr),
+			cleaner(std::make_unique<Cleaner>(*this))
 	{
-		create_instance();
+		try  
+		{
+			create_instance();
 
-		#ifndef NDEBUG
-			create_debug_messenger();
-		#endif
+			#ifndef NDEBUG
+				create_debug_messenger();
+			#endif
 
-		pick_device();
+			pick_device();
 
-		create_surface(window_handle);
+			create_surface_win32(win_handle);
 
-		create_device(requirements);
+			create_device(requirements);
 
-		setup_vma();
+			setup_vma();
 
-		this->swapchain = std::make_unique<Swapchain>(*this);
-		this->commandManager = std::make_unique<CommandManager>(this->queue_families_indices, this->device, MAX_FRAMES_IN_FLIGHT);
-		this->syncManager = std::make_unique<SyncManager>(this->device, MAX_FRAMES_IN_FLIGHT);
+			this->swapchain = std::make_unique<Swapchain>(*this);
+			this->commandManager = std::make_unique<CommandManager>(this->queue_families_indices, this->device, MAX_FRAMES_IN_FLIGHT);
+			this->syncManager = std::make_unique<SyncManager>(this->device, MAX_FRAMES_IN_FLIGHT);
 
-		create_frames();
+			create_frames();
 
+		}
+		catch (const std::runtime_error& err)
+		{
+			GSAM_LOG_ERROR(err.what());
+			exit(-1);
+		}
 	}
-	catch (const std::runtime_error& err)
+#endif
+
+#ifdef __APPLE__
+	// Apple constructor
+    VulkanBackend::Context::Context(CAMetalLayer* win_handle, GSAM::Vulkan::ApplicationRequirements& requirements);
+#endif
+
+#ifdef VK_USE_PLATFORM_WAYLAND_KHR
+	// Wayland constructor
+	VulkanBackend::Context::Context(wl_display* display, wl_surface* surface, GSAM::Vulkan::ApplicationRequirements& requirements)
+		: 	instance(VK_NULL_HANDLE), 
+			physical_device(VK_NULL_HANDLE), 
+			surface(VK_NULL_HANDLE), 
+			device(VK_NULL_HANDLE), 
+			queue_families_indices({std::nullopt}), 
+			swapchain(nullptr),
+			commandManager(nullptr),
+			syncManager(nullptr),
+			cleaner(std::make_unique<Cleaner>(*this))
+			{
+				try  
+					{
+						create_instance();
+
+						#ifndef NDEBUG
+							create_debug_messenger();
+						#endif
+
+						pick_device();
+
+						create_surface_wayland(display, surface);
+
+						create_device(requirements);
+
+						setup_vma();
+
+						this->swapchain = std::make_unique<Swapchain>(*this);
+						this->commandManager = std::make_unique<CommandManager>(this->queue_families_indices, this->device, MAX_FRAMES_IN_FLIGHT);
+						this->syncManager = std::make_unique<SyncManager>(this->device, MAX_FRAMES_IN_FLIGHT);
+
+						create_frames();
+
+					}
+					catch (const std::runtime_error& err)
+					{
+						GSAM_LOG_ERROR(err.what());
+						exit(-1);
+					}
+			}
+#endif
+
+#ifdef VK_USE_PLATFORM_XCB_KHR
+	// XCB constructor
+    VulkanBackend::Context::Context(xcb_connection_t* connection, xcb_window_t window, GSAM::Vulkan::ApplicationRequirements& requirements)
+		: 	instance(VK_NULL_HANDLE), 
+			physical_device(VK_NULL_HANDLE), 
+			surface(VK_NULL_HANDLE), 
+			device(VK_NULL_HANDLE), 
+			queue_families_indices({std::nullopt}), 
+			swapchain(nullptr),
+			commandManager(nullptr),
+			syncManager(nullptr),
+			cleaner(std::make_unique<Cleaner>(*this))
 	{
-		std::cerr << err.what() << std::endl;
-		exit(-1);
+		try  
+			{
+				create_instance();
+
+				#ifndef NDEBUG
+					create_debug_messenger();
+				#endif
+
+				pick_device();
+
+				create_surface_xcb(connection, window);
+
+				create_device(requirements);
+
+				setup_vma();
+
+				this->swapchain = std::make_unique<Swapchain>(*this);
+				this->commandManager = std::make_unique<CommandManager>(this->queue_families_indices, this->device, MAX_FRAMES_IN_FLIGHT);
+				this->syncManager = std::make_unique<SyncManager>(this->device, MAX_FRAMES_IN_FLIGHT);
+
+				create_frames();
+
+			}
+			catch (const std::runtime_error& err)
+			{
+				GSAM_LOG_ERROR(err.what());
+				exit(-1);
+			}
 	}
+#endif
+
+#ifdef VK_USE_PLATFORM_XLIB_KHR
+	// X11 constructor
+	VulkanBackend::Context::Context(Display* display, Window window, GSAM::Vulkan::ApplicationRequirements& requirements)
+		: 	instance(VK_NULL_HANDLE), 
+			physical_device(VK_NULL_HANDLE), 
+			surface(VK_NULL_HANDLE), 
+			device(VK_NULL_HANDLE), 
+			queue_families_indices({std::nullopt}), 
+			swapchain(nullptr),
+			commandManager(nullptr),
+			syncManager(nullptr),
+			cleaner(std::make_unique<Cleaner>(*this))
+		{
+			try  
+			{
+				create_instance();
+
+				#ifndef NDEBUG
+					create_debug_messenger();
+				#endif
+
+				pick_device();
+
+				create_surface_xlib(display, window);
+
+				create_device(requirements);
+
+				setup_vma();
+
+				this->swapchain = std::make_unique<Swapchain>(*this);
+				this->commandManager = std::make_unique<CommandManager>(this->queue_families_indices, this->device, MAX_FRAMES_IN_FLIGHT);
+				this->syncManager = std::make_unique<SyncManager>(this->device, MAX_FRAMES_IN_FLIGHT);
+
+				create_frames();
+
+			}
+			catch (const std::runtime_error& err)
+			{
+				GSAM_LOG_ERROR(err.what());
+				exit(-1);
+			}
+		}
+#endif
 
 
-}
 
 void VulkanBackend::Context::shutdown()
 {
@@ -89,9 +229,11 @@ void VulkanBackend::Context::create_instance()
 
 	std::vector<const char*> layers;
 	#ifndef NDEBUG
-		if (this->check_validation_layers_support()) layers.push_back("VK_LAYER_KHRONOS_validation");
-			else GSAM_LOG_DEBUG("Validation layers not supported");
-		GSAM_LOG_DEBUG("pushed VK_LAYER_KHRONOS_validation");
+		if (this->check_validation_layers_support()) 
+		{
+			layers.push_back("VK_LAYER_KHRONOS_validation");
+			GSAM_LOG_DEBUG("pushed VK_LAYER_KHRONOS_validation");
+		} else GSAM_LOG_DEBUG("Validation layers not supported");
 	#endif
 
 	VkApplicationInfo appInfo{};
@@ -106,10 +248,10 @@ void VulkanBackend::Context::create_instance()
     createInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
     createInfo.pApplicationInfo = &appInfo;
 
-	createInfo.enabledExtensionCount = extensions.size();
+	createInfo.enabledExtensionCount = static_cast<uint32_t>(extensions.size());
 	createInfo.ppEnabledExtensionNames = extensions.data();
 
-	createInfo.enabledLayerCount = layers.size();
+	createInfo.enabledLayerCount = static_cast<uint32_t>(layers.size());
 	createInfo.ppEnabledLayerNames = layers.data();
 
 
@@ -157,12 +299,9 @@ void VulkanBackend::Context::pick_device()
 
 }
 
-/*
-	Creates a surface, a connection between Vulkan and our window handle,
-	the window handle can come from any window library, in fact it is a
-	void pointer
-*/
-void VulkanBackend::Context::create_surface(void* win_handle)
+
+#ifdef _WIN32
+void VulkanBackend::Context::create_surface_win32(void* win_handle)
 {
 	VkWin32SurfaceCreateInfoKHR info{};
 	info.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
@@ -174,6 +313,65 @@ void VulkanBackend::Context::create_surface(void* win_handle)
 	VkResult creationResult = vkCreateWin32SurfaceKHR(this->instance, &info, nullptr, &this->surface);
 	GSAM_VK_CHECK(creationResult, "Failed to create Win32 surface");
 }
+#endif
+
+
+#ifdef __APPLE__
+void VulkanBackend::Context::create_surface_apple(void* win_handle)
+{
+	GSAM_THROW_ERROR("Im too lazy to make the apple implementation!");
+}
+#endif
+
+#ifdef VK_USE_PLATFORM_XCB_KHR
+void VulkanBackend::Context::create_surface_xcb(xcb_connection_t* connection, xcb_window_t window)
+{
+	VkXcbSurfaceCreateInfoKHR info
+	{
+		.sType = VK_STRUCTURE_TYPE_XCB_SURFACE_CREATE_INFO_KHR,
+		.pNext = nullptr,
+		.flags = 0,
+		.connection = connection,
+		.window = window
+	};
+	VkResult creationResult = vkCreateXcbSurfaceKHR(this->instance, &info, nullptr, &this->surface);
+	GSAM_VK_CHECK(creationResult, "Failed to create XCB surface");
+}
+#endif
+
+#ifdef VK_USE_PLATFORM_XLIB_KHR
+void VulkanBackend::Context::create_surface_xlib(Display* display, Window window)
+{
+	VkXlibSurfaceCreateInfoKHR info
+	{
+		.sType = VK_STRUCTURE_TYPE_XLIB_SURFACE_CREATE_INFO_KHR,
+		.pNext = nullptr,
+		.flags = 0,
+		.dpy = display,
+		.window = window
+	};
+	VkResult creationResult = vkCreateXlibSurfaceKHR(this->instance, &info, nullptr, &this->surface);
+	GSAM_VK_CHECK(creationResult, "Failed to create Xlib surface");
+}
+#endif
+
+#ifdef VK_USE_PLATFORM_WAYLAND_KHR
+void VulkanBackend::Context::create_surface_wayland(wl_display* display, wl_surface* surface)
+{
+	VkWaylandSurfaceCreateInfoKHR info
+	{
+		.sType = VK_STRUCTURE_TYPE_WAYLAND_SURFACE_CREATE_INFO_KHR,
+		.pNext = nullptr,
+		.flags = 0,
+		.display = display,
+		.surface = surface
+	};
+	VkResult creationResult = vkCreateWaylandSurfaceKHR(this->instance, &info, nullptr, &this->surface);
+	GSAM_VK_CHECK(creationResult, "Failed to create Wayland surface");
+}
+#endif
+
+
 
 void VulkanBackend::Context::create_device(GSAM::Vulkan::ApplicationRequirements& requirements)
 {

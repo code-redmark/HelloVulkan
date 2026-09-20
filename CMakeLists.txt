@@ -6,9 +6,8 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 find_package(Vulkan REQUIRED)
-find_package(KTX REQUIRED)
-
-
+find_package(Ktx REQUIRED)
+find_package(glfw3 REQUIRED)
   
 file (GLOB_RECURSE CXX_SRC "src/*.cpp" "src/*.c")
 
@@ -23,12 +22,13 @@ add_executable(HelloVulkan ${CXX_SRC})
 set_property(TARGET HelloVulkan PROPERTY CXX_STANDARD 17)
 set_property(TARGET HelloVulkan PROPERTY CXX_STANDARD_REQUIRED ON)
 
-set(ASAN OFF)
+option(ASAN "Enable AddressSanitizer" OFF)
 
 if (ASAN)
-target_compile_options(HelloVulkan PRIVATE /fsanitize=address)
-target_link_options(HelloVulkan PRIVATE /fsanitize=address)
-endif()  
+    target_compile_options(HelloVulkan PRIVATE -fsanitize=address)
+    target_link_options(HelloVulkan PRIVATE -fsanitize=address)
+endif()
+
 
 target_include_directories (HelloVulkan PRIVATE libs)
 target_include_directories(HelloVulkan PRIVATE src)
@@ -36,4 +36,29 @@ target_include_directories(HelloVulkan PRIVATE src)
 target_link_libraries(HelloVulkan PRIVATE
 	Vulkan::Vulkan
     KTX::ktx
+    glfw
+)
+
+if (CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    find_package(X11 REQUIRED)
+
+    if (X11_FOUND)
+        target_link_libraries(HelloVulkan PRIVATE
+            X11::X11
+            X11::Xrandr
+            X11::Xcursor
+            X11::Xi
+            X11::Xinerama
+            X11::Xext
+            X11::Xfixes
+            X11::Xrender
+        )
+    endif()
+    
+endif()
+
+add_custom_command(TARGET HelloVulkan POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${CMAKE_SOURCE_DIR}/src/assets"
+        "$<TARGET_FILE_DIR:HelloVulkan>/assets"
 )

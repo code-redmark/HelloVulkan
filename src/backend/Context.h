@@ -66,7 +66,23 @@ private:
         Creates a surface to make Vulkan communicate with our
         window manager
     */
-    void create_surface(void* win_handle);
+    #ifdef __APPLE__
+    void create_surface_apple(void* win_handle);
+    #endif
+    #ifdef _WIN32
+    void create_surface_win32(void* win_handle);
+    #endif
+    #ifdef __linux__
+        #ifdef VK_USE_PLATFORM_XCB_KHR
+        void create_surface_xcb(void* win_handle);
+        #endif
+        #ifdef VK_USE_PLATFORM_XLIB_KHR
+        void create_surface_xlib(Display* display, Window window);
+        #endif
+        #ifdef VK_USE_PLATFORM_WAYLAND_KHR
+        void create_surface_wayland(wl_display* display, wl_surface* surface);
+        #endif
+    #endif
 
     /*
         Creates a "logical" device (VkDevice) through
@@ -114,7 +130,24 @@ private:
     std::unique_ptr<Cleaner> cleaner;
 
 public:
-    Context(void* window_handle, GSAM::Vulkan::ApplicationRequirements &requirements);
+    #if defined(_WIN32)
+        Context(HWND win_handle, GSAM::Vulkan::ApplicationRequirements& requirements);
+    #elif defined(__APPLE__)
+            Context(CAMetalLayer* win_handle, GSAM::Vulkan::ApplicationRequirements& requirements);
+    #elif defined(__linux__)
+        #ifdef VK_USE_PLATFORM_WAYLAND_KHR
+            #include <wayland-client.h>
+            Context(wl_display* display, wl_surface* surface, GSAM::Vulkan::ApplicationRequirements& requirements);
+        #endif
+
+        #ifdef VK_USE_PLATFORM_XCB_KHR
+            Context(xcb_connection_t* connection, xcb_window_t window, GSAM::Vulkan::ApplicationRequirements& requirements);
+        #endif
+
+        #ifdef VK_USE_PLATFORM_XLIB_KHR
+            Context(Display* display, Window window, GSAM::Vulkan::ApplicationRequirements& requirements);
+        #endif
+    #endif
     void shutdown();
 
 

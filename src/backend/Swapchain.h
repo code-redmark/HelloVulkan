@@ -11,8 +11,6 @@ private:
 // small functions to keep code away from constructor
 void createSwapchainKHR(const VkDevice& device);
 
-void get_surface_images(const VkDevice& device); 
-
 void set_queue_families(const std::array<std::optional<int>, GSAM::Vulkan::capability_count()>& queue_families_indices);
 
 void set_image_format();
