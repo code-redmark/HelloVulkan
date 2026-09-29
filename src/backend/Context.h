@@ -104,7 +104,7 @@ private:
     TypedResourceRegistry<GpuBuffer> bufferRegistry;
     std::vector<TypedResourceHandle<GpuBuffer>> bufferHandles;
 
-    TypedResourceHandle<GpuBuffer> CreateBuffer(
+    TypedResourceHandle<GpuBuffer> CreateGpuBuffer(
         const VkBufferCreateInfo& buffer_create_info,
         const VmaAllocationCreateInfo& allocation_create_info
     );
@@ -112,11 +112,13 @@ private:
     TypedResourceRegistry<GpuImage> imageRegistry;
     std::vector<TypedResourceHandle<GpuImage>> imageHandles;
     
-    TypedResourceHandle<GpuImage> CreateImage(
+    TypedResourceHandle<GpuImage> CreateGpuImage(
         const VkImageCreateInfo image_create_info, 
         const VmaAllocationCreateInfo& allocation_create_info,
         VkImageViewCreateInfo& image_view_create_info
     );
+
+    void write_ktxTexture_to_GpuImage(GpuImage& image, ktxTexture* texture);
 
     TypedResourceRegistry<GpuMesh> meshRegistry;
     std::vector<TypedResourceHandle<GpuMesh>> meshHandles;

@@ -36,14 +36,15 @@ namespace VulkanBackend
     };
 
 
-    // Only contains a GpuBuffer, to be edited
+    // GpuMesh is an higher level object containing buffers and images
+    // which are objects that are totally handled by the backend using
+    // the corresponding registries
     struct GpuMesh
     {
         GpuMesh() = default;
         explicit GpuMesh(const GpuBuffer& buffer);
 
         GpuBuffer buffer{};
-        void Free(const VmaAllocator& vma);
     };
 
     struct GpuImage

@@ -14,27 +14,31 @@ friend class Context;
 private:
 
     /*
-        A command pool is created for every queue family our 
-        context picked up
+        Contains the base command pools assigned to each queue family
+        the context has picked
     */
-    std::array<std::optional<VkCommandPool>, GSAM::Vulkan::capability_count()> pools;
-    
-    std::vector<VkCommandBuffer> commandBuffers;
-
+    std::array<std::optional<VkCommandPool>, GSAM::Vulkan::capability_count()> base_pools;
     /*
-        Creates a command pool for each of the context's queue
-        families
+        Contains the base command buffers assigned to frame in flight
     */
-    void create_command_pools(std::array<std::optional<int>, GSAM::Vulkan::capability_count()> queue_families_indices, const VkDevice& device);
+    std::vector<VkCommandBuffer> base_buffers;
+
+    TypedResourceRegistry<VkCommandPool> cmdPoolRegistry;
+    std::vector<TypedResourceHandle<VkCommandPool>> cmdPoolHandles;
     
-public:
+    public:
+    
+    CommandManager(std::array<std::optional<int>, GSAM::Vulkan::capability_count()> queue_families_indices, const VkDevice& device, const int max_frames_in_flight);
+    void Free(const VkDevice& device);
+    
+    VkCommandBuffer get_frame_command_buffer(Frame& frame);
+    VkCommandPool get_family_pool(GSAM::Vulkan::QueueFamilyCapability family_capability);
 
-CommandManager(std::array<std::optional<int>, GSAM::Vulkan::capability_count()> queue_families_indices, const VkDevice& device, const int max_frames_in_flight);
-void Free(const VkDevice& device);
-
-VkCommandBuffer get_frame_command_buffer(Frame& frame);
-VkCommandBuffer create_command_buffer(const VkDevice& device, GSAM::Vulkan::QueueFamilyCapability family_pool);
-
-
+    TypedResourceHandle<VkCommandPool> create_command_pool(const VkDevice& device, const uint32_t queue_family_index);
+    
+    VkCommandBuffer create_command_buffer(const VkDevice& device, GSAM::Vulkan::QueueFamilyCapability family_capability);
+    std::vector<VkCommandBuffer> create_command_buffers(const VkDevice& device, GSAM::Vulkan::QueueFamilyCapability family_capability, uint32_t count);
+    
+    
 
 };

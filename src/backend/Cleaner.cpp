@@ -8,9 +8,9 @@
 VulkanBackend::Cleaner::Cleaner(Context& context)
     : context(context) {}
 
-void VulkanBackend::Cleaner::FreeAssets()
+void VulkanBackend::Cleaner::FreeGpuResources()
 {
-    GSAM_LOG_DEBUG("Freeing meshes");
+    GSAM_LOG_DEBUG("Freeing buffers");
     for (const TypedResourceHandle<GpuBuffer>& handle : context.bufferHandles)
 	{
 		GpuBuffer* buff = context.bufferRegistry.Get(handle);
@@ -18,14 +18,6 @@ void VulkanBackend::Cleaner::FreeAssets()
 		buff->Free(context.vma);
 		
 		context.bufferRegistry.Release(handle);
-	}
-
-	GSAM_LOG_DEBUG("Freeing meshes");
-	for (const TypedResourceHandle<GpuMesh>& handle : context.meshHandles)
-	{
-		GpuMesh* mesh = context.meshRegistry.Get(handle);
-		mesh->Free(context.vma);
-		context.meshRegistry.Release(handle);
 	}
 
 	GSAM_LOG_DEBUG("Freeing images");

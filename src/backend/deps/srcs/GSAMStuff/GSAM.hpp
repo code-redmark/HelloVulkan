@@ -102,10 +102,10 @@ namespace GSAM
         };
 
         template <typename E>
-        constexpr inline int enum_index(E Enum) { return static_cast<int>(Enum); }
+        constexpr inline int enumtoi(E Enum) { return static_cast<int>(Enum); }
 
         template <typename E>
-        constexpr inline E index_enum(int index) { return static_cast<E>(index); }
+        constexpr inline E itoenum(int index) { return static_cast<E>(index); }
     }
 
 }

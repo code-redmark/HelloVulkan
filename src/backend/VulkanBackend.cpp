@@ -20,10 +20,6 @@ int GSAM::Vulkan::ApplicationRequirements::queue_requirement(GSAM::Vulkan::Queue
 	return requirements[static_cast<int>(capability)].second; 
 }
 
-void VulkanBackend::GpuMesh::Free(const VmaAllocator& vma)
-{
-	this->buffer.Free(vma);
-}
 
 void VulkanBackend::Frame::Free(VmaAllocator vma)
 {

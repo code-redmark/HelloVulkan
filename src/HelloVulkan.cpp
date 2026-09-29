@@ -36,9 +36,6 @@ int main(void)
 	}
 
 
-	GSAM::Vulkan::ApplicationRequirements requirements;
-	requirements.set_requirement(GSAM::Vulkan::QueueFamilyCapability::Graphics, true, 1);
-	requirements.set_requirement(GSAM::Vulkan::QueueFamilyCapability::Presentation, true, 1);
 	
 	Display* dpy = glfwGetX11Display();
 	if (dpy == NULL) GSAM_THROW_ERROR("Couldn't get X11 display");
@@ -46,7 +43,16 @@ int main(void)
 	Window win = glfwGetX11Window(window);
 	if (win == None) GSAM_THROW_ERROR("Couldn't get X11 window handle");
 
+	GSAM::Vulkan::ApplicationRequirements requirements;
+	requirements.set_requirement(GSAM::Vulkan::QueueFamilyCapability::Graphics, true, 1);
+	requirements.set_requirement(GSAM::Vulkan::QueueFamilyCapability::Presentation, true, 1);
+
 	VulkanBackend::Context context(dpy, win, requirements);	
+
+	context.CreateMesh("assets/tree.obj");
+
+	VulkanBackend::ImageData imgData = VulkanBackend::load_image("assets/cobblestone.png");
+	context.CreateTexture(imgData);
 
 	while (!glfwWindowShouldClose(window))
 	{	

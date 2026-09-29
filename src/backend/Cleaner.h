@@ -13,7 +13,7 @@ public:
     /*
         Frees meshes, textures, etc.
     */
-    void FreeAssets();
+    void FreeGpuResources();
 
     /*
         Frees Vulkan objects needed for the program to run properly,

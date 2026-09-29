@@ -192,7 +192,7 @@ void VulkanBackend::Context::shutdown()
 {
 	GSAM_VK_CHECK(vkDeviceWaitIdle(this->device), "Failed to wait for idle, something is broken");
 	
-	this->cleaner->FreeAssets();
+	this->cleaner->FreeGpuResources();
 	this->cleaner->FreeVulkanObjects();
 	this->cleaner->FreeManagers();
 	this->cleaner->FreeCore();
@@ -391,10 +391,10 @@ void VulkanBackend::Context::create_device(GSAM::Vulkan::ApplicationRequirements
 		int q_count = -1;
 		if (requirements.requires(GSAM::Vulkan::QueueFamilyCapability::Graphics))
 		{
-			if (!this->queue_families_indices[enum_index(GSAM::Vulkan::QueueFamilyCapability::Graphics)].has_value() && 
+			if (!this->queue_families_indices[enumtoi(GSAM::Vulkan::QueueFamilyCapability::Graphics)].has_value() && 
 			fams_props[i].queueFlags & VK_QUEUE_GRAPHICS_BIT)
 			{
-				this->queue_families_indices[enum_index(GSAM::Vulkan::QueueFamilyCapability::Graphics)] = i;
+				this->queue_families_indices[enumtoi(GSAM::Vulkan::QueueFamilyCapability::Graphics)] = i;
 
 				used = true;
 				int count = requirements.queue_requirement(GSAM::Vulkan::QueueFamilyCapability::Presentation);
@@ -405,7 +405,7 @@ void VulkanBackend::Context::create_device(GSAM::Vulkan::ApplicationRequirements
 		
 		if (requirements.requires(GSAM::Vulkan::QueueFamilyCapability::Presentation))
 		{
-			if (!this->queue_families_indices[enum_index(GSAM::Vulkan::QueueFamilyCapability::Presentation)].has_value())
+			if (!this->queue_families_indices[enumtoi(GSAM::Vulkan::QueueFamilyCapability::Presentation)].has_value())
 			{
 				
 				VkBool32 supported = VK_FALSE;
@@ -418,7 +418,7 @@ void VulkanBackend::Context::create_device(GSAM::Vulkan::ApplicationRequirements
 			
 				if (supported == VK_TRUE && requestResult == VK_SUCCESS)
 				{
-					this->queue_families_indices[enum_index(GSAM::Vulkan::QueueFamilyCapability::Presentation)] = i;	
+					this->queue_families_indices[enumtoi(GSAM::Vulkan::QueueFamilyCapability::Presentation)] = i;	
 				} 
 
 				used = true;
@@ -441,9 +441,9 @@ void VulkanBackend::Context::create_device(GSAM::Vulkan::ApplicationRequirements
 
 	}
 
-	for (int i = 0; i < enum_index(GSAM::Vulkan::QueueFamilyCapability::Count); i++)
+	for (int i = 0; i < enumtoi(GSAM::Vulkan::QueueFamilyCapability::Count); i++)
 	{
-		if (requirements.requires(GSAM::Vulkan::index_enum<GSAM::Vulkan::QueueFamilyCapability>(i)) && !this->queue_families_indices[i].has_value()) 
+		if (requirements.requires(GSAM::Vulkan::itoenum<GSAM::Vulkan::QueueFamilyCapability>(i)) && !this->queue_families_indices[i].has_value()) 
 		{
 			GSAM_THROW_ERROR("Available queue families couldn't satisfy application requirements");
 		}
@@ -516,7 +516,130 @@ void VulkanBackend::Context::setup_vma()
 	GSAM_VK_CHECK(res, "Failed to create VMA Allocator");
 }
 
-TypedResourceHandle<VulkanBackend::GpuImage> VulkanBackend::Context::CreateImage(
+void VulkanBackend::Context::write_ktxTexture_to_GpuImage(GpuImage& image, ktxTexture* texture)
+{
+	std::optional<int> graphics_family_index = this->queue_families_indices[GSAM::Vulkan::enumtoi(GSAM::Vulkan::QueueFamilyCapability::Graphics)];
+	if (!graphics_family_index.has_value())
+	{
+		GSAM_THROW_ERROR("Can't write to a texture without a Graphics queue family!");
+	}
+
+	VkBufferCreateInfo buffer_create_info {
+		.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+		.size = texture->dataSize,
+		.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT
+	};
+
+	VmaAllocationCreateInfo allocation_create_info{
+		.flags =
+			VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
+			VMA_ALLOCATION_CREATE_MAPPED_BIT,
+		.usage = VMA_MEMORY_USAGE_AUTO
+	};
+
+	TypedResourceHandle<GpuBuffer> buffer_handle = this->CreateGpuBuffer(buffer_create_info, allocation_create_info);
+	void* buffer_data = this->bufferRegistry.Get(buffer_handle)->allocationInfo.pMappedData;
+	std::memcpy(buffer_data, texture->pData, texture->dataSize);
+
+	TypedResourceHandle<VkFence> fence_handle = this->syncManager->create_fence(this->device);
+	
+	VkCommandBuffer cmd_buffer = this->commandManager->create_command_buffer(
+		this->device,
+		GSAM::Vulkan::QueueFamilyCapability::Graphics
+	);
+
+	VkCommandBufferBeginInfo cmd_buffer_begin_info{
+    	.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+    	.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT
+	};
+	VkResult begin_res = vkBeginCommandBuffer(cmd_buffer, &cmd_buffer_begin_info);
+	GSAM_VK_CHECK(begin_res, "Failed to begin command buffer")
+
+	VkImageMemoryBarrier2 copy_barrier {
+		.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+    	.srcStageMask = VK_PIPELINE_STAGE_2_NONE,
+    	.srcAccessMask = VK_ACCESS_2_NONE,
+    	.dstStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+    	.dstAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT,
+    	.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+    	.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+    	.image = image.image,
+    	.subresourceRange = { 
+			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, 
+			.levelCount = texture->numLevels, 
+			.layerCount = 1 
+		}
+	};
+
+	VkDependencyInfo barrier_texture_info {
+		.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+		.imageMemoryBarrierCount = 1,
+		.pImageMemoryBarriers = &copy_barrier
+	};
+
+	vkCmdPipelineBarrier2(cmd_buffer, &barrier_texture_info);
+	
+	std::vector<VkBufferImageCopy> copy_regions;
+	for (int i = 0; i < texture->numLevels; i++)
+	{
+		ktx_size_t mipOffset{0};
+    	KTX_error_code ret = ktxTexture_GetImageOffset(texture, i, 0, 0, &mipOffset);
+		copy_regions.push_back({
+			.bufferOffset = mipOffset,
+			.imageSubresource{.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .mipLevel = (uint32_t)i, .layerCount = 1},
+			.imageExtent{.width = texture->baseWidth >> i, .height = texture->baseHeight >> i, .depth = 1 },
+		});
+	}
+
+	GpuBuffer* buffer = this->bufferRegistry.Get(buffer_handle);
+	VkFence* fence = this->syncManager->get_fence(fence_handle);
+
+	vkCmdCopyBufferToImage(cmd_buffer, buffer->buffer, image.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, static_cast<uint32_t>(copy_regions.size()), copy_regions.data());
+	VkImageMemoryBarrier2 read_barrier{
+		.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+		.srcStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT,
+		.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT,
+		.dstStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+		.dstAccessMask = VK_ACCESS_SHADER_READ_BIT,
+		.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+		.newLayout = VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL,
+		.image = image.image,
+		.subresourceRange = {.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .levelCount = texture->numLevels, .layerCount = 1 }
+	};
+	barrier_texture_info.pImageMemoryBarriers = &read_barrier;
+	vkCmdPipelineBarrier2(cmd_buffer, &barrier_texture_info);
+
+	GSAM_VK_CHECK(vkEndCommandBuffer(cmd_buffer), "Failed to end command buffer");
+
+	VkCommandBufferSubmitInfo cmd_buffer_submit_info{
+		.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO,
+		.commandBuffer = cmd_buffer
+	};
+	VkSubmitInfo2 submit_info{
+		.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
+		.commandBufferInfoCount = 1,
+		.pCommandBufferInfos = &cmd_buffer_submit_info
+	};
+	
+	VkDeviceQueueInfo2 info
+	{
+		.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_INFO_2,
+		.pNext = nullptr,
+		.flags = 0,
+		.queueFamilyIndex = static_cast<uint32_t>(graphics_family_index.value()),
+		.queueIndex = 0
+	};
+	VkQueue queue;
+	vkGetDeviceQueue2(this->device, &info, &queue);
+
+	VkResult submission_res = vkQueueSubmit2(queue, 1, &submit_info, *fence);
+	VkResult wait_for_fences_res = vkWaitForFences(device, 1, fence, VK_TRUE, UINT64_MAX);
+
+	GSAM_VK_CHECK(submission_res, "Failed to submit command to " + std::to_string(graphics_family_index.value()) + " family queue");
+	GSAM_VK_CHECK(wait_for_fences_res, "Failed while waiting for fence")
+}
+
+TypedResourceHandle<VulkanBackend::GpuImage> VulkanBackend::Context::CreateGpuImage(
 	const VkImageCreateInfo image_create_info, 
 	const VmaAllocationCreateInfo& allocation_create_info,
 	VkImageViewCreateInfo& image_view_create_info
@@ -524,12 +647,13 @@ TypedResourceHandle<VulkanBackend::GpuImage> VulkanBackend::Context::CreateImage
 {
 	GpuImage image = GpuImage(this->vma, image_create_info, allocation_create_info, this->device, image_view_create_info);
 	auto handle = this->imageRegistry.Allocate();
+	vmaSetAllocationName(this->vma, image.allocation, ("imageRegistry handle of ID " + std::to_string(handle.id)).c_str());
 	this->imageRegistry.Set(handle, image);
 
 	this->imageHandles.push_back(handle);
 	return handle;
 }
-TypedResourceHandle<VulkanBackend::GpuBuffer> VulkanBackend::Context::CreateBuffer(
+TypedResourceHandle<VulkanBackend::GpuBuffer> VulkanBackend::Context::CreateGpuBuffer(
 	const VkBufferCreateInfo& buffer_create_info,
 	const VmaAllocationCreateInfo& allocation_create_info
 )
@@ -537,9 +661,9 @@ TypedResourceHandle<VulkanBackend::GpuBuffer> VulkanBackend::Context::CreateBuff
 	GpuBuffer buffer(this->vma, buffer_create_info, allocation_create_info);
 	auto handle = this->bufferRegistry.Allocate();
 	this->bufferRegistry.Set(handle, buffer);
+	this->bufferHandles.push_back(handle);
 	return handle;
 }
-
 
 /*
 	Temporary function, this wont be an option in GSAM which is going
@@ -583,7 +707,7 @@ GSAM::GSMesh VulkanBackend::Context::CreateMesh(const std::filesystem::path& pat
 
 		TypedResourceHandle<GpuBuffer> bufferHandle;
 		
-		bufferHandle = this->CreateBuffer(bufferCreateInfo, bufferAllocInfo);
+		bufferHandle = this->CreateGpuBuffer(bufferCreateInfo, bufferAllocInfo);
 		GpuBuffer* buff = this->bufferRegistry.Get(bufferHandle);
 		if (!buff) GSAM_THROW_ERROR("Buffer wasn't created correctly");
 		vmaSetAllocationName(this->vma, buff->allocation, "Mesh Shader GpuBuffer");
@@ -592,6 +716,7 @@ GSAM::GSMesh VulkanBackend::Context::CreateMesh(const std::filesystem::path& pat
 		TypedResourceHandle<GpuMesh> meshHandle = this->meshRegistry.Allocate();
 		this->meshRegistry.Set(meshHandle, mesh);
 		this->meshHandles.push_back(meshHandle);
+
 
 		VulkanMeshImplementation m_impl 
 		{
@@ -638,18 +763,18 @@ std::optional<VulkanBackend::Frame> VulkanBackend::Context::CreateFrame()
 
 GSAM::GSTexture VulkanBackend::Context::CreateTexture(const ImageData& data)
 {
-	ktxTextureCreateInfo createInfo{};
-
-    createInfo.vkFormat = VK_FORMAT_R8G8B8A8_UNORM;
-    createInfo.baseWidth = data.width;
-    createInfo.baseHeight = data.height;
-    createInfo.baseDepth = 1;
-    createInfo.numDimensions = 2;
-    createInfo.numLevels = 1;
-    createInfo.numLayers = 1;
-    createInfo.numFaces = 1;
-    createInfo.isArray = KTX_FALSE;
-    createInfo.generateMipmaps = KTX_FALSE;
+	ktxTextureCreateInfo createInfo {
+		.vkFormat = VK_FORMAT_R8G8B8A8_UNORM,
+    	.baseWidth = static_cast<ktx_uint32_t>(data.width),
+    	.baseHeight = static_cast<ktx_uint32_t>(data.height),
+    	.baseDepth = 1,
+    	.numDimensions = 2,
+    	.numLevels = 1,
+    	.numLayers = 1,
+    	.numFaces = 1,
+    	.isArray = KTX_FALSE,
+    	.generateMipmaps = KTX_FALSE,
+	};
 
     ktxTexture2* texture2 = nullptr;
 
@@ -663,11 +788,11 @@ GSAM::GSTexture VulkanBackend::Context::CreateTexture(const ImageData& data)
 
     if (result != KTX_SUCCESS)
 	{
-		GSAM_LOG_ERROR("Failed to create texture (failed ktxTexture2 creation)");
+		GSAM_LOG_ERROR("ktxTexture2 creation Failed");
         return GSAM::GSTexture();
 	}
 
-    const ktx_size_t imageSize =
+    const ktx_size_t img_size =
         static_cast<ktx_size_t>(data.width) *
         static_cast<ktx_size_t>(data.height) *
         static_cast<ktx_size_t>(data.channels);
@@ -678,7 +803,7 @@ GSAM::GSTexture VulkanBackend::Context::CreateTexture(const ImageData& data)
         0,                  
         0,                  
         data.pixels,
-        imageSize
+        img_size
     );
 
     if (result != KTX_SUCCESS)
@@ -708,25 +833,28 @@ GSAM::GSTexture VulkanBackend::Context::CreateTexture(const ImageData& data)
 		.subresourceRange = {.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .levelCount = texture->numLevels, .layerCount = 1 }
 	};
 
+	TypedResourceHandle<GpuImage> handle;
 	try 
 	{
-		TypedResourceHandle<GpuImage> handle = this->CreateImage(image_create_info, image_allocation_create_info, image_view_create_info);
-		VulkanTextureImplementation impl {
-			.handle = handle,
-			.ktx = texture
-		};
-
-		GSAM::GSTexture out = {
-			.impl = std::make_unique<GSAM::TextureImplementation>(impl)
-		};
-
-		return out;
-	} catch (const std::runtime_error& err)
+		handle = this->CreateGpuImage(image_create_info, image_allocation_create_info, image_view_create_info);
+		GpuImage* image = this->imageRegistry.Get(handle);
+		this->write_ktxTexture_to_GpuImage(*image, texture);
+	} 
+	catch (const std::runtime_error& err)
 	{
-		GSAM_LOG_ERROR("Failed to create texture (Failed to create texture image: " + std::string(err.what()) + ")");
+		GSAM_LOG_ERROR("Failed to create texture image: " + std::string(err.what()));
 		return GSAM::GSTexture();
-	}	
+	}
 
+	VulkanTextureImplementation impl {
+		.handle = handle,
+		.ktx = texture
+	};
 
+	GSAM::GSTexture out {
+		.impl = std::make_unique<GSAM::TextureImplementation>(impl)
+	};
+
+	return out; 
 }
 

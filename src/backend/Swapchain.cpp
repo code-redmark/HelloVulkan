@@ -221,7 +221,7 @@ void VulkanBackend::Swapchain::create_depth_attachment(VulkanBackend::Context& c
 
     viewInfo.subresourceRange = subresourceRange;
 
-    TypedResourceHandle<GpuImage> handle = context.CreateImage(imageInfo, allocInfo, viewInfo);
+    TypedResourceHandle<GpuImage> handle = context.CreateGpuImage(imageInfo, allocInfo, viewInfo);
     auto img = context.imageRegistry.Get(handle);
     
     vmaSetAllocationName(context.vma, img->allocation, "Depth attachment image");

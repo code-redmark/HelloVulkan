@@ -1,82 +1,125 @@
 #include "CommandManager.h"
 
-VulkanBackend::CommandManager::CommandManager(std::array<std::optional<int>, GSAM::Vulkan::capability_count()> queue_families_indices, const VkDevice& device, const int max_frames_in_flight)
+VulkanBackend::CommandManager::CommandManager(std::array<std::optional<int>, GSAM::Vulkan::capability_count()> queue_families_indices, const VkDevice &device, const int max_frames_in_flight)
 {
-    this->commandBuffers.resize(max_frames_in_flight);
-
+    this->base_buffers.resize(max_frames_in_flight);
     try
     {
-        create_command_pools(queue_families_indices, device);
-    } catch (const std::runtime_error& err)
+        for (int i = 0; i < queue_families_indices.size(); i++)
+        {
+            if (!queue_families_indices[i].has_value())
+                continue;
+
+            VkCommandPoolCreateInfo info{
+                .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+                .pNext = nullptr,
+                .flags = 0,
+                .queueFamilyIndex = static_cast<uint32_t>(queue_families_indices[i].value()),
+            };
+
+            VkCommandPool pool;
+            VkResult res = vkCreateCommandPool(device, &info, nullptr, &pool);
+            GSAM_VK_CHECK(res, "Couldn't create command pool");
+            this->base_pools[i] = pool;
+        }
+    }
+    catch (const std::runtime_error &err)
     {
         std::cerr << err.what() << "\n";
     }
 }
 
-
-
-void VulkanBackend::CommandManager::create_command_pools(std::array<std::optional<int>, GSAM::Vulkan::capability_count()> queue_families_indices, const VkDevice& device)
+TypedResourceHandle<VkCommandPool> VulkanBackend::CommandManager::create_command_pool(const VkDevice &device, const uint32_t queue_family_index)
 {
-    VkCommandPoolCreateInfo info{};
-    info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-    info.flags = 0;
-    info.pNext = nullptr;    
+    VkCommandPoolCreateInfo info {
+        .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+        .pNext = nullptr,
+        .flags = 0,
+        .queueFamilyIndex = static_cast<uint32_t>(queue_family_index)
+    };
 
-    for (int i = 0; i < this->pools.size(); i++)
-    {
-        if (!queue_families_indices[i].has_value()) continue;
-    
-        VkCommandPool pool;
-        
-        info.queueFamilyIndex = static_cast<uint32_t>(queue_families_indices[i].value()); 
+    VkCommandPool pool;
+    VkResult res = vkCreateCommandPool(device, &info, nullptr, &pool);
+    GSAM_VK_CHECK(res, "Couldn't create command pool");
 
-        VkResult res = vkCreateCommandPool(device, &info, nullptr, &pool);
-        GSAM_VK_CHECK(res, "create command pool for family " + std::to_string(i));
+    auto handle = this->cmdPoolRegistry.Allocate();
+    this->cmdPoolRegistry.Set(handle, pool);
 
-        this->pools[i] = pool;
-    }
-
-    GSAM_LOG_DEBUG("created command pools");
+    return handle;
 }
 
-VkCommandBuffer VulkanBackend::CommandManager::get_frame_command_buffer(Frame& frame)
+VkCommandBuffer VulkanBackend::CommandManager::get_frame_command_buffer(Frame &frame)
 {
-    if (frame.index >= this->commandBuffers.size())
+    if (frame.index >= this->base_buffers.size())
     {
         GSAM_THROW_ERROR("frame index " + std::to_string(frame.index) + " is out of bounds for command buffer array");
     }
 
-    return this->commandBuffers[frame.index];
+    return this->base_buffers[frame.index];
 }
 
-VkCommandBuffer VulkanBackend::CommandManager::create_command_buffer(const VkDevice& device, GSAM::Vulkan::QueueFamilyCapability family_pool)
+VkCommandPool VulkanBackend::CommandManager::get_family_pool(GSAM::Vulkan::QueueFamilyCapability family_capability)
 {
-    if (!this->pools[enum_index(family_pool)].has_value())
+    if (!this->base_pools[enumtoi(family_capability)].has_value())
     {
-        GSAM_THROW_ERROR("command pool for family " + std::to_string(enum_index(family_pool)) + " doesn't exist");
+        GSAM_THROW_ERROR("command pool for family " + std::to_string(enumtoi(family_capability)) + " doesn't exist");
     }
 
-    VkCommandBufferAllocateInfo info{};
-    info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-    info.pNext = nullptr;
-    info.commandPool = this->pools[enum_index(family_pool)].value();
-    info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-    info.commandBufferCount = 1;
-
-    VkCommandBuffer buffer;
-
-    VkResult res = vkAllocateCommandBuffers(device, &info, &buffer);
-    GSAM_VK_CHECK(res, "Couldn't allocate command buffer for family " + std::to_string(enum_index(family_pool)));
-
-    return buffer;
+    return this->base_pools[enumtoi(family_capability)].value();
 }
 
-void VulkanBackend::CommandManager::Free(const VkDevice& device)
+VkCommandBuffer VulkanBackend::CommandManager::create_command_buffer(const VkDevice &device, GSAM::Vulkan::QueueFamilyCapability family_capability)
 {
-    for (std::optional<VkCommandPool> pool : this->pools)
+    VkCommandPool pool = this->get_family_pool(family_capability);
+
+    VkCommandBufferAllocateInfo info{
+        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+        .pNext = nullptr,
+        .commandPool = pool,
+        .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+        .commandBufferCount = 1};
+
+    VkCommandBuffer data;
+    VkResult res = vkAllocateCommandBuffers(device, &info, &data);
+    GSAM_VK_CHECK(res, "Couldn't allocate command buffer for family " + std::to_string(enumtoi(family_capability)));
+
+    return data;
+}
+
+std::vector<VkCommandBuffer> VulkanBackend::CommandManager::create_command_buffers(const VkDevice &device, GSAM::Vulkan::QueueFamilyCapability family_pool, uint32_t count)
+{
+    if (!this->base_pools[enumtoi(family_pool)].has_value())
     {
-        if (!pool.has_value()) continue;
+        GSAM_THROW_ERROR("command pool for family " + std::to_string(enumtoi(family_pool)) + " doesn't exist");
+    }
+
+    VkCommandBufferAllocateInfo info{
+        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+        .pNext = nullptr,
+        .commandPool = this->base_pools[enumtoi(family_pool)].value(),
+        .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+        .commandBufferCount = count};
+
+    std::vector<VkCommandBuffer> buffers(count);
+
+    VkResult res = vkAllocateCommandBuffers(device, &info, buffers.data());
+    GSAM_VK_CHECK(res, "Couldn't allocate command buffer for family " + std::to_string(enumtoi(family_pool)));
+
+    return buffers;
+}
+
+void VulkanBackend::CommandManager::Free(const VkDevice &device)
+{
+    for (std::optional<VkCommandPool> pool : this->base_pools)
+    {
+        if (!pool.has_value())
+            continue;
 
         vkDestroyCommandPool(device, pool.value(), nullptr);
+    }
+    for (TypedResourceHandle<VkCommandPool> handle : this->cmdPoolHandles)
+    {
+        VkCommandPool *pool = this->cmdPoolRegistry.Get(handle);
+        vkDestroyCommandPool(device, *pool, nullptr);
     }
 }
