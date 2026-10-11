@@ -27,7 +27,10 @@ private:
         Represents the physical GPU we're going to use
         in our program
     */
+
+    
     VkPhysicalDevice physical_device = VK_NULL_HANDLE;
+    DeviceCapabilities device_capabilities;
     /*
         Represents a communication created between our
         VkInstance and our window manager
@@ -119,6 +122,11 @@ private:
     );
 
     void write_ktxTexture_to_GpuImage(GpuImage& image, ktxTexture* texture);
+
+    TypedResourceRegistry<VkSampler> textureSamplerRegistry;
+    std::vector<TypedResourceHandle<VkSampler>> textureSamplers; 
+
+    TypedResourceHandle<VkSampler> CreateTextureSampler(const SamplerSettings &settings = SamplerSettings());
 
     TypedResourceRegistry<GpuMesh> meshRegistry;
     std::vector<TypedResourceHandle<GpuMesh>> meshHandles;

@@ -30,6 +30,16 @@ void VulkanBackend::Cleaner::FreeGpuResources()
 			vkDestroyImageView(context.device, image->imageView, nullptr);
 		}
 	}
+
+	GSAM_LOG_DEBUG("Freeing texture samplers");
+	for (const TypedResourceHandle<VkSampler>& handle : context.textureSamplers)
+	{
+		auto* sampler = context.textureSamplerRegistry.Get(handle);
+		if (sampler)
+		{
+			vkDestroySampler(context.device, *sampler, nullptr);
+		}
+	}
 }
 
 void VulkanBackend::Cleaner::FreeVulkanObjects()

@@ -39,12 +39,6 @@ namespace VulkanBackend
     class GpuMesh;
     class GpuImage;
 
-    class TextureImplementation : public GSAM::TextureImplementation
-    {
-        ktxTexture texture;
-        VkSampler sampler{};
-    };
-
     struct MeshData {
         std::vector<GSAM::Vertex> vertices;
         std::vector<uint16_t> indices;
@@ -76,7 +70,14 @@ namespace VulkanBackend
         void Free(VmaAllocator vma);
     };
 
+    struct DeviceCapabilities
+    {
+        bool samplerAnisotropySupported = false;
+        bool samplerAnisotropyEnabled = false;
 
+        float maxSamplerAnisotropy = 1.0f;
+        float maxSamplerLodBias = 0.0f;
+    };
 
     MeshData LoadMesh_Obj(const std::filesystem::path& path);
 
@@ -90,11 +91,33 @@ namespace VulkanBackend
 
     ImageData load_image(const std::filesystem::path& path);
 
-    struct VulkanTextureImplementation : public GSAM::TextureImplementation
+    struct TextureImplementation : public GSAM::TextureImplementation
     {
         TypedResourceHandle<GpuImage> handle;
         ktxTexture* ktx;
+        VkSampler sampler{};
     };
+    struct SamplerSettings
+    {
+        VkFilter magFilter{VK_FILTER_LINEAR};
+        VkFilter minFilter{VK_FILTER_LINEAR};
+        VkSamplerMipmapMode mipmapMode{VK_SAMPLER_MIPMAP_MODE_LINEAR};
+        VkSamplerAddressMode addressModeU{VK_SAMPLER_ADDRESS_MODE_REPEAT};
+        VkSamplerAddressMode addressModeV{VK_SAMPLER_ADDRESS_MODE_REPEAT};
+        VkSamplerAddressMode addressModeW{VK_SAMPLER_ADDRESS_MODE_REPEAT};
+        float mipLodBias{0.0f};
+        VkBool32 anisotropyEnable{VK_TRUE};
+        float maxAnisotropy{16.0f};
+        VkBool32 compareEnable{VK_FALSE};
+        VkCompareOp compareOp{VK_COMPARE_OP_ALWAYS};
+        float minLod{0.0f};
+        float maxLod{1.0f};
+        VkBorderColor borderColor{VK_BORDER_COLOR_INT_OPAQUE_BLACK};
+        VkBool32 unnormalizedCoordinates{VK_FALSE};
+    };
+
+    
+    VkSampler create_texture_sampler(const VkDevice& device, const DeviceCapabilities& deviceCaps, const SamplerSettings& settings = SamplerSettings());
 
 }
 

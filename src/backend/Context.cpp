@@ -297,6 +297,26 @@ void VulkanBackend::Context::pick_device()
 		else GSAM_THROW_ERROR("No physical device found");
 	}
 
+	
+	VkPhysicalDeviceFeatures features{};
+		vkGetPhysicalDeviceFeatures(
+			this->physical_device,
+			&features);
+
+		VkPhysicalDeviceProperties properties{};
+		vkGetPhysicalDeviceProperties(
+			this->physical_device,
+			&properties);
+
+		this->device_capabilities.samplerAnisotropySupported =
+			features.samplerAnisotropy == VK_TRUE;
+
+		this->device_capabilities.maxSamplerAnisotropy =
+			properties.limits.maxSamplerAnisotropy;
+
+		this->device_capabilities.maxSamplerLodBias =
+			properties.limits.maxSamplerLodBias;
+
 }
 
 
@@ -483,6 +503,8 @@ void VulkanBackend::Context::create_device(GSAM::Vulkan::ApplicationRequirements
 	info.pEnabledFeatures = nullptr;
 	info.flags = 0;
 
+
+
 	VkResult deviceResult = vkCreateDevice(this->physical_device, &info, nullptr, &this->device);
 	GSAM_VK_CHECK(deviceResult, "Failed to create logical device");
 	
@@ -639,6 +661,15 @@ void VulkanBackend::Context::write_ktxTexture_to_GpuImage(GpuImage& image, ktxTe
 	GSAM_VK_CHECK(wait_for_fences_res, "Failed while waiting for fence")
 }
 
+TypedResourceHandle<VkSampler> VulkanBackend::Context::CreateTextureSampler(const SamplerSettings &settings)
+{
+	auto handle = this->textureSamplerRegistry.Allocate();
+	VkSampler sampler = create_texture_sampler(this->device, this->device_capabilities, settings);
+	this->textureSamplerRegistry.Set(handle, sampler);
+	this->textureSamplers.push_back(handle);
+	return handle;
+}
+
 TypedResourceHandle<VulkanBackend::GpuImage> VulkanBackend::Context::CreateGpuImage(
 	const VkImageCreateInfo image_create_info, 
 	const VmaAllocationCreateInfo& allocation_create_info,
@@ -761,6 +792,9 @@ std::optional<VulkanBackend::Frame> VulkanBackend::Context::CreateFrame()
 	return std::nullopt;
 }
 
+/*
+	TODO: Create an interface the user can use to pass the actual sampling settings
+*/
 GSAM::GSTexture VulkanBackend::Context::CreateTexture(const ImageData& data)
 {
 	ktxTextureCreateInfo createInfo {
@@ -846,9 +880,12 @@ GSAM::GSTexture VulkanBackend::Context::CreateTexture(const ImageData& data)
 		return GSAM::GSTexture();
 	}
 
-	VulkanTextureImplementation impl {
+	auto samplerHandle = this->CreateTextureSampler(SamplerSettings());
+
+	TextureImplementation impl {
 		.handle = handle,
-		.ktx = texture
+		.ktx = texture,
+		.sampler = *(this->textureSamplerRegistry.Get(samplerHandle))
 	};
 
 	GSAM::GSTexture out {

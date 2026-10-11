@@ -41,6 +41,40 @@ VulkanBackend::ImageData VulkanBackend::load_image(const std::filesystem::path& 
 	return imageData;
 }
 
+VkSampler VulkanBackend::create_texture_sampler(const VkDevice& device, const DeviceCapabilities& deviceCaps, const SamplerSettings& settings)
+{	
+	auto anisotropyEnable = settings.anisotropyEnable;
+	if (anisotropyEnable == VK_TRUE && !deviceCaps.samplerAnisotropyEnabled)
+	{
+		GSAM_LOG_ERROR("You set a VkSamplerCreateInfo.samplerAnisotropy is VK_TRUE but the samplerAnistropy feature was not enabled, turning it off...");
+		anisotropyEnable = VK_FALSE;
+	}
+
+	VkSamplerCreateInfo samplerInfo {
+		.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
+		.magFilter = settings.magFilter,
+		.minFilter = settings.minFilter,
+		.mipmapMode = settings.mipmapMode,
+		.addressModeU = settings.addressModeU,
+		.addressModeV = settings.addressModeV,
+		.addressModeW = settings.addressModeW,
+		.mipLodBias = settings.mipLodBias,
+		.anisotropyEnable = anisotropyEnable,
+		.maxAnisotropy = settings.maxAnisotropy,
+		.compareEnable = settings.compareEnable,
+		.compareOp = settings.compareOp,
+		.minLod = settings.minLod,
+		.maxLod = settings.maxLod,
+		.borderColor = settings.borderColor,
+		.unnormalizedCoordinates = settings.unnormalizedCoordinates
+	};
+	VkSampler sampler;
+	VkResult res = vkCreateSampler(device, &samplerInfo, nullptr, &sampler);
+	GSAM_VK_CHECK(res, "Failed to create texture sampler");
+
+	return sampler;
+}
+
 VulkanBackend::GpuImage::GpuImage(
 	const VmaAllocator& vma, 
 	const VkImageCreateInfo& image_create_info, 

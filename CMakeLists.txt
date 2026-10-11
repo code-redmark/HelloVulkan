@@ -8,6 +8,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 find_package(Vulkan REQUIRED)
 find_package(Ktx REQUIRED)
 find_package(glfw3 REQUIRED)
+find_package(glm REQUIRED)
   
 file (GLOB_RECURSE CXX_SRC "src/*.cpp" "src/*.c")
 
